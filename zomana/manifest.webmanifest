@@ -1,9 +1,9 @@
 {
   "name": "Zomana Trust",
   "short_name": "Zomana",
-  "start_url": "/zomana/",
+  "start_url": "/zomana/?launch=1",
   "scope": "/zomana/",
-  "display": "standalone",
+  "display": "browser",
   "theme_color": "#14213D",
   "background_color": "#14213D",
   "icons": [

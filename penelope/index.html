@@ -4,8 +4,6 @@
 <title>Penelope Close Trust</title>
 <meta name="robots" content="noindex,nofollow">
 <meta name="theme-color" content="#1E1E1E">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Penelope">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="application-name" content="Penelope">
@@ -28,7 +26,17 @@ a.btn{display:inline-block;margin-top:18px;padding:14px 26px;border-radius:999px
 <p class="tip" id="tip">Tip: add this page to your home screen for one-tap access.</p>
 </main>
 <script>
-(function(){var s=window.navigator.standalone===true||(window.matchMedia&&matchMedia('(display-mode: standalone)').matches);
-if(s){document.getElementById('tip').style.display='none';window.location.replace("https://sites.google.com/thornbird97.com/penelope-thornbird/home");}})();
+(function(){
+  var hub="https://sites.google.com/thornbird97.com/penelope-thornbird/home";
+  var params=new URLSearchParams(location.search);
+  var fromHome=params.get('launch')==='1'||(!document.referrer&&history.length<=1);
+  if(fromHome){location.replace(hub);return;}
+  setTimeout(function(){
+    if(params.get('launch')==='1')return;
+    var u=new URL(location.href);
+    u.searchParams.set('launch','1');
+    history.replaceState(null,'',u.pathname+u.search+u.hash);
+  },1000);
+})();
 </script>
 </body></html>

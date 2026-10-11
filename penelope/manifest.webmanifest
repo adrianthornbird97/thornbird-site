@@ -1,9 +1,9 @@
 {
   "name": "Penelope Close Trust",
   "short_name": "Penelope",
-  "start_url": "/penelope/",
+  "start_url": "/penelope/?launch=1",
   "scope": "/penelope/",
-  "display": "standalone",
+  "display": "browser",
   "theme_color": "#1E1E1E",
   "background_color": "#1C1C1C",
   "icons": [
