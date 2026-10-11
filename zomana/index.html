@@ -29,7 +29,7 @@ a.btn{display:inline-block;margin-top:18px;padding:14px 26px;border-radius:999px
 (function(){
   var hub="https://sites.google.com/thornbird97.com/zomana-thornbird/home";
   var params=new URLSearchParams(location.search);
-  var fromHome=params.get('launch')==='1'||(!document.referrer&&history.length<=1);
+  var fromHome=params.get('launch')==='1';
   if(fromHome){location.replace(hub);return;}
   setTimeout(function(){
     if(params.get('launch')==='1')return;
