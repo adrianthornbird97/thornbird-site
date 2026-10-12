@@ -1,0 +1,29 @@
+{
+  "name": "FV Cape Town",
+  "short_name": "FV Cape Town",
+  "start_url": "/fvct/?launch=1",
+  "scope": "/fvct/",
+  "display": "browser",
+  "theme_color": "#064080",
+  "background_color": "#064080",
+  "icons": [
+    {
+      "src": "/fvct/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/fvct/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/fvct/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
