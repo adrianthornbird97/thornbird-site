@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>FV Istra</title>
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#064080">
+<meta name="apple-mobile-web-app-title" content="FV Istra">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="application-name" content="FV Istra">
+<link rel="apple-touch-icon" sizes="180x180" href="/fvistra/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/fvistra/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/fvistra/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="/fvistra/icon-512.png">
+<link rel="manifest" href="/fvistra/manifest.webmanifest">
+<style>
+html,body{margin:0;height:100%;background:#064080;color:#f2f2f2;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+main{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;box-sizing:border-box}
+img{max-width:min(80vw,360px);height:auto;margin-bottom:28px}
+a.btn{display:inline-block;margin-top:18px;padding:14px 26px;border-radius:999px;background:#f2f2f2;color:#064080;text-decoration:none;font-weight:600}
+.tip{margin-top:22px;font-size:14px;opacity:.75;max-width:320px}
+</style>
+</head><body><main>
+<img src="/fvistra/logo.png" width="600" height="600" alt="FV Istra">
+<p>Opening your client hub…</p>
+<a class="btn" href="https://sites.google.com/thornbird97.com/fvistra-thornbird/home">Open client hub</a>
+<p class="tip" id="tip">Tip: add this page to your home screen for one-tap access.</p>
+</main>
+<script>
+(function(){
+  var hub="https://sites.google.com/thornbird97.com/fvistra-thornbird/home";
+  var params=new URLSearchParams(location.search);
+  var fromHome=params.get('launch')==='1';
+  if(fromHome){location.replace(hub);return;}
+  setTimeout(function(){
+    if(params.get('launch')==='1')return;
+    var u=new URL(location.href);
+    u.searchParams.set('launch','1');
+    history.replaceState(null,'',u.pathname+u.search+u.hash);
+  },1000);
+})();
+</script>
+</body></html>

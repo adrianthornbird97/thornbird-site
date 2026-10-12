@@ -1,0 +1,29 @@
+{
+  "name": "FV Istra",
+  "short_name": "FV Istra",
+  "start_url": "/fvistra/?launch=1",
+  "scope": "/fvistra/",
+  "display": "browser",
+  "theme_color": "#064080",
+  "background_color": "#064080",
+  "icons": [
+    {
+      "src": "/fvistra/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/fvistra/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/fvistra/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
