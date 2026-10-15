@@ -1,4 +1,8 @@
 <!doctype html><html lang="en-ZA"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Google Analytics 4 -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-7CPVT25DHQ"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());
+gtag('config','G-7CPVT25DHQ',{anonymize_ip:true,allow_google_signals:false,allow_ad_personalization_signals:false});</script>
 <title>Sign up | Finertecture, by Thornbird</title><meta name="description" content="Finertecture: your CFO, in your pocket. Fractional CFO subscriptions for South African small businesses, by Thornbird.">
 <meta property="og:type" content="website"><meta property="og:site_name" content="Finertecture, by Thornbird"><meta property="og:title" content="Sign up | Finertecture, by Thornbird"><meta property="og:description" content="Finertecture: your CFO, in your pocket. Fractional CFO subscriptions for South African small businesses, by Thornbird."><meta property="og:url" content="https://thornbird97.com/finertecture/signup.html"><meta property="og:image" content="https://thornbird97.com/finertecture/assets/Finertecture_banner.png"><meta property="og:image:width" content="1280"><meta property="og:image:height" content="720"><meta name="twitter:card" content="summary_large_image">
 <meta name="robots" content="noindex, nofollow"><!-- DRAFT: remove noindex at launch -->
@@ -23,6 +27,7 @@
 <script>
 // Subscribe emails the sign-up details via FormSubmit (max ~4s wait), then sends the visitor to the Paystack hosted recurring-payment page for the selected plan.
 const PR={foundation:"Foundation · R1,650/month",structure:"Structure · R4,100/month",blueprint:"Blueprint · R8,250/month"};
+const VAL={foundation:1650,structure:4100,blueprint:8250},NAME={foundation:"Foundation",structure:"Structure",blueprint:"Blueprint"};
 const PAY={foundation:"https://paystack.shop/pay/03k67eej95",structure:"https://paystack.shop/pay/afifb9xqnc",blueprint:"https://paystack.shop/pay/i4o2pvtuy4"};
 const f=document.getElementById('signup'),s=document.getElementById('sum');
 const q=new URLSearchParams(location.search).get('plan');if(PR[q])f.plan.value=q;
@@ -30,12 +35,13 @@ function upd(){s.textContent=PR[f.plan.value]||''}f.addEventListener('change',up
 window.addEventListener('pageshow',()=>{const b=f.querySelector('button[type=submit]');b.disabled=false;b.textContent='Subscribe'});
 function go(e){e.preventDefault();const u=PAY[f.plan.value];if(!u)return false;
 const btn=f.querySelector('button[type=submit]');btn.disabled=true;btn.textContent='Redirecting to Paystack…';
-let done=false;const pay=()=>{if(done)return;done=true;location.href=u};
+let waits=2,done=false;const go2=()=>{if(done)return;done=true;location.href=u};const pay=()=>{if(--waits<=0)go2()};
+const k=f.plan.value;if(window.shareTrack)shareTrack('begin_checkout',{currency:'ZAR',value:VAL[k],plan:NAME[k],items:[{item_id:k,item_name:'Finertecture '+NAME[k],price:VAL[k],quantity:1}]},pay);else pay();
 const v=n=>f[n].value;
 const data={_subject:"New Finertecture sign-up: "+PR[v('plan')],_template:"table",_captcha:"false",
 plan:PR[v('plan')],name:v('name'),company:v('company'),email:v('email'),phone:v('phone'),entities:v('entities'),accounting_system:v('system'),popia_consent:f.popia.checked?"given":"not given",page:location.href,submitted_at:new Date().toISOString()};
 const ac=window.AbortController?new AbortController():null;
-setTimeout(()=>{if(ac)ac.abort();pay()},4000);
+setTimeout(()=>{if(ac)ac.abort();go2()},4000);/* hard cap: never block payment longer than ~4s */
 try{fetch("https://formsubmit.co/ajax/hello@finertecture.com",{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify(data),signal:ac?ac.signal:undefined}).then(pay,pay)}catch(_){pay()}
 return false}
 </script></main>

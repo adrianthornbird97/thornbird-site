@@ -11,11 +11,13 @@
   var me=document.currentScript, theme=(me&&me.dataset.theme)||'thornbird', n=0, openW=null;
   var ICON='<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>';
   /* Analytics: no provider is loaded yet. track() uses gtag (GA4) or GoatCounter if one is added later, else does nothing. */
-  function track(name,params){try{
-    if(typeof window.gtag==='function')window.gtag('event',name,params);
+  /* track(name, params[, done]): done() runs once the hit is sent (or after 1s), so callers can navigate safely. */
+  function track(name,params,done){var fired=false,cb=function(){if(!fired){fired=true;done&&done()}};try{
+    if(name==='share')params={method:params.channel,content_type:params.item,item_id:params.page_path,channel:params.channel,page_path:params.page_path,item:params.item};
+    if(typeof window.gtag==='function'){if(done){params=Object.assign({},params,{event_callback:cb,event_timeout:1000});setTimeout(cb,1100)}window.gtag('event',name,params);return}
     else if(window.goatcounter&&typeof window.goatcounter.count==='function')
       window.goatcounter.count({path:name+'/'+params.item+'/'+params.channel,title:params.page_path,event:true});
-  }catch(e){}}
+  }catch(e){}cb()}
   window.shareTrack=track;
   function utm(u,ch,item){try{var x=new URL(u);x.searchParams.set('utm_source',ch);x.searchParams.set('utm_medium','share');x.searchParams.set('utm_campaign',item);return x.href}catch(e){return u}}
   function abs(u){try{return new URL(u,location.href).href}catch(e){return u}}
@@ -42,7 +44,8 @@
       if(s.image)h+='<li><a data-net="Download" href="'+s.image+'" download="'+s.image.split('/').pop()+'">Download image</a></li>';
       ul.innerHTML=h+'<li><button type="button" class="sh-copy" data-net="Copy">Copy link</button></li>';
       ul.querySelector('.sh-copy').onclick=function(){copy(utm(s.url,'copy',s.item));ev('copy',s)};
-      [].forEach.call(ul.querySelectorAll('a[data-net]'),function(a){a.addEventListener('click',function(){ev(a.dataset.net.toLowerCase(),s)})});
+      [].forEach.call(ul.querySelectorAll('a[data-net]'),function(a){a.addEventListener('click',function(){var ch=a.dataset.net.toLowerCase();ev(ch,s);
+        if(ch==='download'){var f=s.image.split('/').pop();track('file_download',{file_name:f,file_extension:f.split('.').pop(),link_url:s.image,link_text:'Download image',content_type:s.item,page_path:location.pathname})}})});
     }
     function copy(u){
       var ok=function(){msg.textContent='Link copied'},bad=function(){msg.textContent='Copy failed: '+u};
@@ -79,6 +82,11 @@
     [].forEach.call(document.querySelectorAll('button[data-share-url]'),function(b){
       var w=document.createElement('span');w.className='sh sh-inline sh-'+theme;b.parentNode.insertBefore(w,b);w.appendChild(b);
       if(!b.querySelector('svg'))b.insertAdjacentHTML('afterbegin',ICON);enhance(b,w)});
+    /* Any element with data-ga-event="name" (and optional data-ga-params='{"k":"v"}') sends that GA4 event on click. */
+    document.addEventListener('click',function(e){var el=e.target.closest&&e.target.closest('[data-ga-event]');if(!el)return;
+      var p={};try{p=JSON.parse(el.dataset.gaParams||'{}')}catch(x){}p.page_path=location.pathname;
+      var href=el.tagName==='A'&&el.getAttribute('href'),plain=href&&!el.target&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&e.button===0;
+      if(plain){e.preventDefault();track(el.dataset.gaEvent,p,function(){location.href=el.href})}else track(el.dataset.gaEvent,p)},true);
     document.addEventListener('keydown',function(e){if(e.key==='Escape'&&openW)openW.close(true)});
     document.addEventListener('click',function(e){if(openW&&!openW.wrap.contains(e.target))openW.close()});
   }
