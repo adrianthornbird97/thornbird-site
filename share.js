@@ -13,7 +13,8 @@
   /* Analytics: no provider is loaded yet. track() uses gtag (GA4) or GoatCounter if one is added later, else does nothing. */
   /* track(name, params[, done]): done() runs once the hit is sent (or after 1s), so callers can navigate safely. */
   function track(name,params,done){var fired=false,cb=function(){if(!fired){fired=true;done&&done()}};try{
-    if(name==='share')params={method:params.channel,content_type:params.item,item_id:params.page_path,channel:params.channel,page_path:params.page_path,item:params.item};
+    if(name==='share'||name==='share_complete')params=Object.assign({method:params.channel,content_type:params.item,item_id:params.page_path},params);
+    params=Object.assign({transport_type:'beacon'},params); /* beacon survives iOS backgrounding/navigation */
     if(typeof window.gtag==='function'){if(done){params=Object.assign({},params,{event_callback:cb,event_timeout:1000});setTimeout(cb,1100)}window.gtag('event',name,params);return}
     else if(window.goatcounter&&typeof window.goatcounter.count==='function')
       window.goatcounter.count({path:name+'/'+params.item+'/'+params.channel,title:params.page_path,event:true});
@@ -54,21 +55,29 @@
     }
     var W={open:function(s){if(openW&&openW!==W)openW.close();build(s);msg.textContent='';pop.hidden=false;btn.setAttribute('aria-expanded','true');place();openW=W;var a=pop.querySelector('a');if(a)a.focus()},
            close:function(f){pop.hidden=true;btn.setAttribute('aria-expanded','false');if(openW===W)openW=null;if(f)btn.focus()},pop:pop,wrap:wrap};
-    function ev(ch,s){track('share',{channel:ch,page_path:location.pathname,item:s.item})}
+    function ev(ch,s,x){track('share',Object.assign({channel:ch,page_path:location.pathname,item:s.item},x||{}))}
+    function done(ch,s){track('share_complete',{channel:ch,page_path:location.pathname,item:s.item})}
     function place(){ /* open downwards when there is no room above (e.g. a top bar); keep inside the viewport */
       pop.classList.remove('sh-down','sh-right','sh-left');var r=pop.getBoundingClientRect();
       if(r.top<8)pop.classList.add('sh-down');r=pop.getBoundingClientRect();
       if(r.right>innerWidth-8)pop.classList.add('sh-right');else if(r.left<8)pop.classList.add('sh-left')}
+    /* Native share: the 'share' event fires the moment the sheet is opened (iOS may freeze the page while the
+       sheet is up, so waiting for the promise loses the hit); 'share_complete' follows if it resolves.
+       The image file is prefetched so navigator.share() runs inside the tap (keeps iOS user activation). */
+    var fileP=null;
+    function prefetch(){var s=btnData(btn);if(fileP||!s.image||!navigator.canShare||!window.File||!window.fetch)return;
+      fileP=fetch(s.image).then(function(r){return r.blob()}).then(function(b){return new File([b],s.image.split('/').pop(),{type:b.type||'image/png'})}).catch(function(){return null});
+      fileP.then(function(f){fileP.file=f})}
     function nativeShare(s){
-      var base={title:s.title,text:s.text,url:utm(s.url,'native',s.item)},fu=utm(s.url,'native-file',s.item);
-      if(s.image&&navigator.canShare&&window.File&&window.fetch){
-        return fetch(s.image).then(function(r){return r.blob()}).then(function(b){
-          var f=new File([b],s.image.split('/').pop(),{type:b.type||'image/png'}),d={title:s.title,text:s.text+' '+fu,files:[f]};
-          if(navigator.canShare(d))return navigator.share(d).then(function(){ev('native-file',s)});
-          return navigator.share(base).then(function(){ev('native',s)})}).catch(function(e){if(e&&e.name==='AbortError')return;return navigator.share(base).then(function(){ev('native',s)})});
-      }
-      return navigator.share(base).then(function(){ev('native',s)});
+      var base={title:s.title,text:s.text,url:utm(s.url,'native',s.item)},f=fileP&&fileP.file,ch='native',d=base;
+      if(f){var fd={title:s.title,text:s.text+' '+utm(s.url,'native-file',s.item),files:[f]};try{if(navigator.canShare(fd)){d=fd;ch='native-file'}}catch(e){}}
+      ev(ch,s,{share_status:'opened'});
+      return navigator.share(d).then(function(){done(ch,s)},function(e){
+        if(e&&e.name==='AbortError')return;
+        if(ch==='native-file'){ch='native';return navigator.share(base).then(function(){done('native',s)},function(){})}});
     }
+    if(btn.dataset.shareImage&&navigator.share){var pf=function(){prefetch()};btn.addEventListener('pointerenter',pf,{once:true});btn.addEventListener('touchstart',pf,{once:true,passive:true});
+      if('IntersectionObserver' in window){var io=new IntersectionObserver(function(es){if(es.some(function(x){return x.isIntersecting})){prefetch();io.disconnect()}});io.observe(btn)}else prefetch()}
     btn.addEventListener('click',function(e){e.preventDefault();var s=btnData(btn);
       if(navigator.share&&(!navigator.canShare||navigator.canShare({title:s.title,text:s.text,url:s.url}))){Promise.resolve(nativeShare(s)).catch(function(){});return}
       pop.hidden?W.open(s):W.close()});
