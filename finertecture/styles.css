@@ -39,3 +39,5 @@ input,select{display:block;width:100%;margin-top:6px;padding:11px 12px;font:300 
 @media(max-width:860px){.g2,.g3,.g4,.story,.fgrid,.opts,.fgrid2{grid-template-columns:1fr}.nav nav a:not(.btn){display:none}section{padding:56px 0}.lockup{margin-bottom:-10px}.form{padding:22px}.sum{display:block;margin:12px 0 0}}
 
 .mindmap{margin:24px 0 0}.mindmap a{display:block;border:1px solid var(--line,#e3e3e3);border-radius:12px;overflow:hidden;background:#fff}.mindmap img{display:block;max-width:100%;height:auto}.mindmap figcaption{margin-top:10px;font-size:14px;color:var(--ag);text-align:center}
+
+.logo,.flogo,.lockup-link{text-decoration:none;cursor:pointer}.flogo{display:inline-block;line-height:0}.lockup-link{display:block}.tbhome{margin-right:6px}@media(max-width:860px){.nav nav{display:flex;gap:6px;align-items:center}.nav .btn.sm{padding:8px 12px;font-size:13px}.tbhome{margin-right:0}}

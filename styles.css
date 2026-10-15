@@ -48,3 +48,5 @@ footer{background:var(--navy);color:#9fb0bf;font-size:.88rem;padding:28px 0;text
 .quote-band .qb-main{font-family:"Playfair Display",Georgia,serif;font-size:clamp(2rem,5vw,3.2rem);margin:0 0 12px;font-weight:700}
 .quote-band .qb-sub{font-size:clamp(1.05rem,2.2vw,1.3rem);opacity:.92;margin:0 auto 28px;max-width:640px}
 .tax-tag{font-style:italic;font-size:1.15rem;color:#b8892d;margin:-4px 0 16px}
+
+.nav-cta{display:flex;gap:8px;align-items:center;flex-wrap:nowrap}.btn-fin{background:#006B3F;color:#fff}.btn-fin:hover{background:#0a7f4d}.svc-logo{display:inline-flex;line-height:0;cursor:pointer;text-decoration:none}@media(max-width:420px){.nav-cta .btn-sm{padding:7px 11px;font-size:.8rem}}
