@@ -22,24 +22,27 @@ gtag('config','G-7CPVT25DHQ',{anonymize_ip:true,allow_google_signals:false,allow
 <label>Number of entities<select name="entities" required><option value="">Select…</option><option>1</option><option>2</option><option>3–5</option><option>More than 5</option></select></label>
 <label>Accounting system<select name="system" required><option value="">Select…</option><option>Zoho Books</option><option>Xero</option><option>Sage</option><option>QuickBooks</option><option>Spreadsheets / bank statements only</option><option>Other</option></select></label></div></fieldset>
 <label class="consent"><input type="checkbox" name="popia" required><span>I consent to Thornbird Trade and Invest 97 (Pty) Ltd processing my personal information to set up and run my Finertecture subscription, as described in the <a href="privacy.html" target="_blank">privacy notice</a> (POPIA).</span></label>
+<label class="consent"><input type="checkbox" name="terms" id="terms" required><span>I agree to the <a href="terms.html" target="_blank" rel="noopener">Subscriber Terms</a> (v0.1-draft).</span></label>
 <div class="ph" id="soon"><strong>Secure monthly billing via Paystack. 3-month minimum, then cancel anytime.</strong><br><small>Questions? <a href="mailto:hello@finertecture.com">hello@finertecture.com</a></small></div>
 <button class="btn big" type="submit">Subscribe</button> <span id="sum" class="sum"></span></form></div></section>
 <script>
 // Subscribe emails the sign-up details via FormSubmit (max ~4s wait), then sends the visitor to the Paystack hosted recurring-payment page for the selected plan.
+const TERMS_VERSION="v0.1-draft (16 Oct 2026)";
+function isoLocal(d){const o=-d.getTimezoneOffset(),sg=o>=0?"+":"-",p=n=>String(Math.floor(Math.abs(n))).padStart(2,"0");return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+"T"+p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds())+sg+p(o/60)+":"+p(o%60)}
 const PR={foundation:"Foundation · R1,650/month",structure:"Structure · R4,100/month",blueprint:"Blueprint · R8,250/month"};
 const VAL={foundation:1650,structure:4100,blueprint:8250},NAME={foundation:"Foundation",structure:"Structure",blueprint:"Blueprint"};
 const PAY={foundation:"https://paystack.shop/pay/03k67eej95",structure:"https://paystack.shop/pay/afifb9xqnc",blueprint:"https://paystack.shop/pay/i4o2pvtuy4"};
 const f=document.getElementById('signup'),s=document.getElementById('sum');
 const q=new URLSearchParams(location.search).get('plan');if(PR[q])f.plan.value=q;
-function upd(){s.textContent=PR[f.plan.value]||''}f.addEventListener('change',upd);upd();
-window.addEventListener('pageshow',()=>{const b=f.querySelector('button[type=submit]');b.disabled=false;b.textContent='Subscribe'});
-function go(e){e.preventDefault();const u=PAY[f.plan.value];if(!u)return false;
+const tb=f.querySelector('button[type=submit]');function upd(){s.textContent=PR[f.plan.value]||'';tb.disabled=!f.terms.checked;tb.title=f.terms.checked?'':'Please agree to the Subscriber Terms first'}f.addEventListener('change',upd);upd();
+window.addEventListener('pageshow',()=>{const b=f.querySelector('button[type=submit]');b.disabled=!f.terms.checked;b.textContent='Subscribe'});
+function go(e){e.preventDefault();if(!f.terms.checked){f.terms.focus();return false}const u=PAY[f.plan.value];if(!u)return false;
 const btn=f.querySelector('button[type=submit]');btn.disabled=true;btn.textContent='Redirecting to Paystack…';
 let waits=2,done=false;const go2=()=>{if(done)return;done=true;location.href=u};const pay=()=>{if(--waits<=0)go2()};
 const k=f.plan.value;if(window.shareTrack)shareTrack('begin_checkout',{currency:'ZAR',value:VAL[k],plan:NAME[k],items:[{item_id:k,item_name:'Finertecture '+NAME[k],price:VAL[k],quantity:1}]},pay);else pay();
 const v=n=>f[n].value;
 const data={_subject:"New Finertecture sign-up: "+PR[v('plan')],_template:"table",_captcha:"false",
-plan:PR[v('plan')],name:v('name'),company:v('company'),email:v('email'),phone:v('phone'),entities:v('entities'),accounting_system:v('system'),popia_consent:f.popia.checked?"given":"not given",page:location.href,submitted_at:new Date().toISOString()};
+plan:PR[v('plan')],name:v('name'),company:v('company'),email:v('email'),phone:v('phone'),entities:v('entities'),accounting_system:v('system'),popia_consent:f.popia.checked?"given":"not given",page:location.href,submitted_at:new Date().toISOString(),terms_version:TERMS_VERSION,terms_accepted:"yes",accepted_at:isoLocal(new Date()),user_agent:navigator.userAgent};
 const ac=window.AbortController?new AbortController():null;
 setTimeout(()=>{if(ac)ac.abort();go2()},4000);/* hard cap: never block payment longer than ~4s */
 try{fetch("https://formsubmit.co/ajax/hello@finertecture.com",{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify(data),signal:ac?ac.signal:undefined}).then(pay,pay)}catch(_){pay()}
@@ -47,5 +50,5 @@ return false}
 </script></main>
 <footer><div class="wrap fgrid"><div><a class="flogo" href="/finertecture/" aria-label="Finertecture home"><img src="assets/Finertecture_icon_192.png" alt="" width="56"></a><div class="brand"><a href="https://thornbird97.com">Finertecture, by Thornbird</a></div>Thornbird Trade and Invest 97 (Pty) Ltd</div>
 <div><a href="how-it-works.html">How it works</a><br><a href="pricing.html">Pricing</a><br><a href="our-story.html">Our story</a><br><a href="signup.html">Sign up</a></div>
-<div><a href="privacy.html">Privacy (POPIA)</a><br><a href="mailto:hello@finertecture.com?subject=Finertecture%20chat">hello@finertecture.com</a><br><a href="https://thornbird97.com">thornbird97.com</a></div></div>
+<div><a href="privacy.html">Privacy (POPIA)</a> · <a href="terms.html">Terms</a><br><a href="mailto:hello@finertecture.com?subject=Finertecture%20chat">hello@finertecture.com</a><br><a href="https://thornbird97.com">thornbird97.com</a></div></div>
 <p class="fine wrap">The springbok mark is an original illustration and is not affiliated with SA Rugby. Thornbird is not VAT-registered, so no VAT is charged.</p></footer><script src="/share.js" defer data-theme="finertecture"></script></body></html>
