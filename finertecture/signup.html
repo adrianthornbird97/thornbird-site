@@ -8,7 +8,8 @@ gtag('config','G-7CPVT25DHQ',{anonymize_ip:true,allow_google_signals:false,allow
 <meta name="robots" content="noindex, nofollow"><!-- DRAFT: remove noindex at launch -->
 <link rel="icon" href="assets/favicon.ico"><link rel="apple-touch-icon" href="assets/Finertecture_icon_180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css"></head><body>
+<link rel="stylesheet" href="styles.css">
+<style>#ndaf[hidden]{display:none}#ndaf{margin:-8px 0 22px}#ndaf .note{margin:0 0 14px;font-size:14px}#ndaf .full{grid-column:1/-1}#ndaf textarea{display:block;width:100%;margin-top:6px;padding:11px 12px;font:300 16px 'IBM Plex Serif',serif;border:1px solid #cfc8b8;border-radius:4px;background:#fff;resize:vertical}</style></head><body>
 <div class="by"><a href="https://thornbird97.com">Finertecture, <em>by Thornbird</em> · thornbird97.com ↗</a></div>
 <header class="nav"><a class="logo" href="/finertecture/" aria-label="Finertecture home"><img src="assets/Finertecture_icon_192.png" alt="Finertecture"></a><nav><a href="index.html">Home</a><a href="how-it-works.html">How it works</a><a href="pricing.html">Pricing</a><a href="our-story.html">Our story</a><a class="btn sm" href="signup.html">Sign up</a></nav></header>
 <main><section class="phead"><div class="wrap"><div class="label">Sign up</div><h1>Choose your plan</h1><p class="narrow">Prices are per month and are the full amount; no VAT is charged. Billed monthly in advance; 3-month minimum, then cancel any time.</p></div></section>
@@ -23,6 +24,10 @@ gtag('config','G-7CPVT25DHQ',{anonymize_ip:true,allow_google_signals:false,allow
 <label>Accounting system<select name="system" required><option value="">Select…</option><option>Zoho Books</option><option>Xero</option><option>Sage</option><option>QuickBooks</option><option>Spreadsheets / bank statements only</option><option>Other</option></select></label></div></fieldset>
 <label class="consent"><input type="checkbox" name="popia" required><span>I consent to Thornbird Trade and Invest 97 (Pty) Ltd processing my personal information to set up and run my Finertecture subscription, as described in the <a href="privacy.html" target="_blank">privacy notice</a> (POPIA).</span></label>
 <label class="consent"><input type="checkbox" name="terms" id="terms" required><span>I agree to the <a href="terms.html" target="_blank" rel="noopener">Subscriber Terms</a> (v0.1-draft).</span></label>
+<label class="consent"><input type="checkbox" name="nda" id="nda" value="yes" aria-controls="ndaf" aria-expanded="false"><span>I'd like a mutual NDA (optional)</span></label>
+<fieldset id="ndaf" hidden><legend>Mutual NDA details</legend><p class="note">We will email the Finertecture Mutual NDA to the email address above, pre-filled for e-signature. These details appear on the NDA as the contracting party.</p><div class="fgrid2">
+<label>Registered legal name of the business<input name="nda_legal_name" autocomplete="organization" disabled></label><label>Registration number or ID number<input name="nda_reg_or_id" disabled></label>
+<label class="full">Physical address<textarea name="nda_address" rows="2" autocomplete="street-address" disabled></textarea></label></div></fieldset>
 <div class="ph" id="soon"><strong>Secure monthly billing via Paystack. 3-month minimum, then cancel anytime.</strong><br><small>Questions? <a href="mailto:hello@finertecture.com">hello@finertecture.com</a></small></div>
 <button class="btn big" type="submit">Subscribe</button> <span id="sum" class="sum"></span></form></div></section>
 <script>
@@ -35,6 +40,10 @@ const PAY={foundation:"https://paystack.shop/pay/03k67eej95",structure:"https://
 const f=document.getElementById('signup'),s=document.getElementById('sum');
 const q=new URLSearchParams(location.search).get('plan');if(PR[q])f.plan.value=q;
 const tb=f.querySelector('button[type=submit]');function upd(){s.textContent=PR[f.plan.value]||'';tb.disabled=!f.terms.checked;tb.title=f.terms.checked?'':'Please agree to the Subscriber Terms first'}f.addEventListener('change',upd);upd();
+const NDA_VERSION="Finertecture Mutual NDA v1 (18 Oct 2026)",NDAF=["nda_legal_name","nda_reg_or_id","nda_address"];
+/* Optional NDA: its fields are enabled and required only while the box is ticked; unticked they are disabled, so they never take part in validation. */
+function ndaSync(){try{const on=f.nda.checked,fs=document.getElementById('ndaf');fs.hidden=!on;f.nda.setAttribute('aria-expanded',on?'true':'false');NDAF.forEach(n=>{f[n].disabled=!on;f[n].required=on})}catch(_){}}
+f.nda.addEventListener('change',ndaSync);window.addEventListener('pageshow',ndaSync);ndaSync();
 window.addEventListener('pageshow',()=>{const b=f.querySelector('button[type=submit]');b.disabled=!f.terms.checked;b.textContent='Subscribe'});
 function go(e){e.preventDefault();if(!f.terms.checked){f.terms.focus();return false}const u=PAY[f.plan.value];if(!u)return false;
 const btn=f.querySelector('button[type=submit]');btn.disabled=true;btn.textContent='Redirecting to Paystack…';
@@ -43,6 +52,10 @@ const k=f.plan.value;if(window.shareTrack)shareTrack('begin_checkout',{currency:
 const v=n=>f[n].value;
 const data={_subject:"New Finertecture sign-up: "+PR[v('plan')],_template:"table",_captcha:"false",
 plan:PR[v('plan')],name:v('name'),company:v('company'),email:v('email'),phone:v('phone'),entities:v('entities'),accounting_system:v('system'),popia_consent:f.popia.checked?"given":"not given",page:location.href,submitted_at:new Date().toISOString(),terms_version:TERMS_VERSION,terms_accepted:"yes",accepted_at:isoLocal(new Date()),user_agent:navigator.userAgent};
+try{const yes=!!(f.nda&&f.nda.checked),nv=n=>yes?String(f[n].value||'').trim():'';/* NDA is never allowed to block payment: any error here is ignored */
+Object.assign(data,{nda_requested:yes?"yes":"no",nda_version:NDA_VERSION,nda_legal_name:nv('nda_legal_name'),nda_reg_or_id:nv('nda_reg_or_id'),nda_address:nv('nda_address')});
+if(yes){data._subject+=" + NDA requested";data.action_for_thornbird_nda="Send Finertecture Mutual NDA pre-filled for e-signature; Adrian countersigns; file signed copy.";
+const ev={plan:NAME[k],nda_version:NDA_VERSION};if(window.shareTrack)shareTrack('nda_requested',ev);else if(typeof gtag==='function')gtag('event','nda_requested',Object.assign({transport_type:'beacon'},ev))}}catch(_){}
 const ac=window.AbortController?new AbortController():null;
 setTimeout(()=>{if(ac)ac.abort();go2()},4000);/* hard cap: never block payment longer than ~4s */
 try{fetch("https://formsubmit.co/ajax/hello@finertecture.com",{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify(data),signal:ac?ac.signal:undefined}).then(pay,pay)}catch(_){pay()}
