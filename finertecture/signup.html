@@ -28,7 +28,7 @@ gtag('config','G-7CPVT25DHQ',{anonymize_ip:true,allow_google_signals:false,allow
 <fieldset id="ndaf" hidden><legend>Mutual NDA details</legend><p class="note">We will email the Finertecture Mutual NDA to the email address above, pre-filled for e-signature. These details appear on the NDA as the contracting party.</p><div class="fgrid2">
 <label>Registered legal name of the business<input name="nda_legal_name" autocomplete="organization" disabled></label><label>Registration number or ID number<input name="nda_reg_or_id" disabled></label>
 <label class="full">Physical address<textarea name="nda_address" rows="2" autocomplete="street-address" disabled></textarea></label>
-<label>Your title / capacity (e.g. Director, Owner) <small>(optional)</small><input name="nda_signatory_title" autocomplete="organization-title" disabled></label><label>Signatory name (if not you) <small>(optional)</small><input name="nda_signatory_name" autocomplete="off" disabled></label></div></fieldset>
+<label>Your title / capacity (e.g. Director, Owner) <small>(optional)</small><input name="nda_signatory_title" autocomplete="organization-title" disabled></label><label>Signatory name (if not you) <small>(optional)</small><input name="nda_signatory_name" autocomplete="off" disabled></label></div><div aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden"><label>Leave this empty<input name="nda_website" tabindex="-1" autocomplete="off"></label></div></fieldset>
 <div class="ph" id="soon"><strong>Secure monthly billing via Paystack. 3-month minimum, then cancel anytime.</strong><br><small>Questions? <a href="mailto:hello@finertecture.com">hello@finertecture.com</a></small></div>
 <button class="btn big" type="submit">Subscribe</button> <span id="sum" class="sum"></span></form></div></section>
 <script>
@@ -41,6 +41,7 @@ const PAY={foundation:"https://paystack.shop/pay/03k67eej95",structure:"https://
 const f=document.getElementById('signup'),s=document.getElementById('sum');
 const q=new URLSearchParams(location.search).get('plan');if(PR[q])f.plan.value=q;
 const tb=f.querySelector('button[type=submit]');function upd(){s.textContent=PR[f.plan.value]||'';tb.disabled=!f.terms.checked;tb.title=f.terms.checked?'':'Please agree to the Subscriber Terms first'}f.addEventListener('change',upd);upd();
+const NDA_API="https://api.finertecture.com/nda";/* Cloudflare Worker finertecture-nda: sends the NDA via Zoho Sign */
 const NDA_VERSION="Finertecture Mutual NDA v1 (18 Oct 2026)",NDAF=["nda_legal_name","nda_reg_or_id","nda_address"],NDAO=["nda_signatory_title","nda_signatory_name"];/* NDAO: optional, never required */
 /* Optional NDA: its fields are enabled and required only while the box is ticked; unticked they are disabled, so they never take part in validation. */
 function ndaSync(){try{const on=f.nda.checked,fs=document.getElementById('ndaf');fs.hidden=!on;f.nda.setAttribute('aria-expanded',on?'true':'false');NDAF.forEach(n=>{f[n].disabled=!on;f[n].required=on});NDAO.forEach(n=>{f[n].disabled=!on;f[n].required=false})}catch(_){}}
@@ -56,6 +57,9 @@ plan:PR[v('plan')],name:v('name'),company:v('company'),email:v('email'),phone:v(
 try{const yes=!!(f.nda&&f.nda.checked),nv=n=>yes?String(f[n].value||'').trim():'';/* NDA is never allowed to block payment: any error here is ignored */
 Object.assign(data,{nda_requested:yes?"yes":"no",nda_version:NDA_VERSION,nda_legal_name:nv('nda_legal_name'),nda_reg_or_id:nv('nda_reg_or_id'),nda_address:nv('nda_address'),nda_signatory_title:nv('nda_signatory_title'),nda_signatory_name:nv('nda_signatory_name')});
 if(yes){data._subject+=" + NDA requested";data.action_for_thornbird_nda="Send Finertecture Mutual NDA pre-filled for e-signature; Adrian countersigns; file signed copy.";
+data.nda_auto_send="requested via Zoho Sign worker (check Zoho Sign; send manually if it is not there)";
+/* Fire-and-forget to the NDA worker: keepalive survives the Paystack redirect; text/plain avoids a CORS preflight; failures are ignored. */
+try{fetch(NDA_API,{method:"POST",mode:"cors",keepalive:true,headers:{"Content-Type":"text/plain;charset=UTF-8"},body:JSON.stringify({nda:"yes",plan:NAME[k],name:v('name'),email:v('email'),nda_legal_name:data.nda_legal_name,nda_reg_or_id:data.nda_reg_or_id,nda_address:String(f.nda_address.value||'').trim(),nda_signatory_title:data.nda_signatory_title,nda_signatory_name:data.nda_signatory_name,nda_website:f.nda_website?f.nda_website.value:''})}).catch(()=>{})}catch(_){}
 const ev={plan:NAME[k],nda_version:NDA_VERSION};if(window.shareTrack)shareTrack('nda_requested',ev);else if(typeof gtag==='function')gtag('event','nda_requested',Object.assign({transport_type:'beacon'},ev))}}catch(_){}
 const ac=window.AbortController?new AbortController():null;
 setTimeout(()=>{if(ac)ac.abort();go2()},4000);/* hard cap: never block payment longer than ~4s */
