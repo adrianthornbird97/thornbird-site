@@ -586,6 +586,7 @@ textarea:-webkit-autofill {
 .sheet {
   overflow-x: auto;
   max-width: 100%;
+  min-width: 0;
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -664,6 +665,55 @@ table.exit-fit th:first-child,
 table.exit-fit td:first-child { width: 13%; }
 table.exit-fit .num { font-size: 12.5px; }
 table.exit-fit th.num { white-space: normal; }
+
+@media screen and (max-width: 719px) {
+  .sheet {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  table.exit-fit,
+  table.compact {
+    table-layout: auto;
+    width: max-content;
+    min-width: 920px;
+  }
+  table.exit-fit { min-width: 1120px; }
+  table.exit-fit th:first-child,
+  table.exit-fit td:first-child,
+  table.compact th:first-child,
+  table.compact td:first-child,
+  table.wide th:first-child,
+  table.wide td:first-child,
+  table.irr th:first-child,
+  table.irr td:first-child {
+    width: auto;
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: #fff;
+    box-shadow: 1px 0 0 rgba(27, 42, 74, 0.08);
+  }
+  table.exit-fit th,
+  table.compact th,
+  table.irr th,
+  table.wide th,
+  table.mid th {
+    white-space: normal;
+    word-break: normal;
+    overflow-wrap: normal;
+    hyphens: none;
+  }
+  table.exit-fit td.num,
+  table.compact td.num,
+  table.irr td.num,
+  table.wide td.num,
+  table.mid td.num {
+    white-space: nowrap;
+  }
+  table.exit-fit tr.hi td:first-child,
+  table.wide tr.hi td:first-child,
+  table.irr tr.hi td:first-child { background: #D9E4F0; }
+}
 
 .closing { margin-top: 16px; max-width: 78ch; color: var(--muted); }
 
