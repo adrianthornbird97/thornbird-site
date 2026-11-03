@@ -805,6 +805,12 @@ function ptsText(v) {
   return (v > 0 ? "+" : "") + n + " pts";
 }
 
+function pointsWords(v) {
+  if (v === null || !isFinite(v)) return "–";
+  var n = (v * 100).toFixed(1);
+  return (v > 0 ? "+" : "") + n + " points";
+}
+
 function routeCells(label, values, flags) {
   var cells = [cell(label)].concat(values.map(function (v) {
     if (v === null) return cell("–");
@@ -823,6 +829,41 @@ function multipleGap(a, b) {
   if (!isFinite(a) || !isFinite(b)) return "–";
   var d = a - b;
   return (d > 0 ? "+" : "") + d.toFixed(2) + "x";
+}
+
+function scenarioModel(m, dep, inv) {
+  var rows = modelWith(m, { dep: dep, inv: inv });
+  var y1 = rows[0];
+  return {
+    inv: inv,
+    dep: dep,
+    lr: m.lr,
+    esc: m.esc,
+    fx0: m.fx0,
+    n: m.n,
+    P: m.P,
+    st: m.st,
+    rows: rows,
+    y1: y1,
+    y10: rows[rows.length - 1],
+    capitalUsd: m.st.capitalPct * y1.pu
+  };
+}
+
+function benefitStrip(c, up) {
+  var irrDetail = pointsWords(c.irrAdvantage) + " on the same net investment cost of " + Rm(c.hardCost) + ".";
+  irrDetail += " Upside scenario: " + irrText(up.orsIrr) + " vs " + irrText(up.divIrr) + ".";
+  var bonusDetail = "Bonuses kept invested offshore to year 10: " + moneyM(c.bonusFx) + " exchange-rate gain + " + moneyM(c.bonusGrowth) + " growth.";
+  var advWord = c.advantage >= 0 ? "More than the dividend route." : "Less than the dividend route.";
+  var upWord = up.advantage >= 0 ? " more." : " less.";
+  var advDetail = advWord + " Upside scenario: " + Rm(Math.abs(up.advantage)) + upWord;
+  return '<section class="benefit" aria-labelledby="benefit-h">' +
+    '<h2 id="benefit-h">The benefit of the structure</h2>' +
+    '<ul class="metrics metrics-benefit">' +
+    '<li><p class="metric-value" data-metric="irr">' + esc(irrText(c.orsIrr) + " vs " + irrText(c.divIrr)) + '</p><p class="metric-label">IRR: cell captive vs dividend route</p><p class="metric-detail">' + esc(irrDetail) + '</p></li>' +
+    '<li><p class="metric-value' + (c.bonusUplift > 0 ? " pos" : "") + '" data-metric="bonus">' + esc(moneyM(c.bonusUplift)) + '</p><p class="metric-label">Bonus growth offshore</p><p class="metric-detail">' + esc(bonusDetail) + '</p></li>' +
+    '<li><p class="metric-value' + (c.advantage > 0 ? " pos" : "") + '" data-metric="advantage">' + esc(Rm(Math.abs(c.advantage))) + '</p><p class="metric-label">Net offshore value advantage</p><p class="metric-detail">' + esc(advDetail) + '</p></li>' +
+    '</ul></section>';
 }
 
 function structureSplit(c) {
@@ -855,10 +896,23 @@ function taxComparison(m) {
   var advRow = routeCells("Advantage", [0, 0, c.preTax - c.divInvested, 0, c.bonusUplift, s.afterAll - divAfter, -s.total, s.net - divAfter], { total: true, pos: true });
   advRow.cells.push(cell(multipleGap(orsMultiple, divMultiple), orsMultiple > divMultiple));
   advRow.cells.push(cell(ptsText(c.irrAdvantage), c.irrAdvantage > 0));
+  var up = dividendCompare(scenarioModel(m, 0.06, 0.06));
   var ahead = moneyM(c.advantage) + (c.advantage >= 0 ? " more than the dividend route" : " versus the dividend route");
   if (c.irrAdvantage !== null) ahead += ", " + ptsText(c.irrAdvantage) + " a year on the IRR";
+  var baseAdv = Math.round(c.orsFromPremium) - Math.round(c.after);
+  var upAdv = Math.round(up.orsFromPremium) - Math.round(up.after);
+  var scenarioRows = [
+    { cells: [cell("Route 1 net offshore value"), cell(R(c.orsFromPremium)), cell(R(up.orsFromPremium))] },
+    { cells: [cell("Route 2 net offshore value"), cell(R(c.after)), cell(R(up.after))] },
+    { cells: [cell("Advantage (R)"), cell(R(baseAdv), baseAdv > 0), cell(R(upAdv), upAdv > 0)] },
+    { cells: [cell("Route 1 IRR"), cell(irrText(c.orsIrr)), cell(irrText(up.orsIrr))] },
+    { cells: [cell("Route 2 IRR"), cell(irrText(c.divIrr)), cell(irrText(up.divIrr))] },
+    { cells: [cell("IRR advantage (points)"), cell(ptsText(c.irrAdvantage), c.irrAdvantage > 0), cell(ptsText(up.irrAdvantage), up.irrAdvantage > 0)] },
+    { cells: [cell("Bonus growth offshore"), cell(R(c.bonusUplift), c.bonusUplift > 0), cell(R(up.bonusUplift), up.bonusUplift > 0)] }
+  ];
   return {
     c: c,
+    up: up,
     ahead: ahead,
     html: '<div class="tax-compare" id="tax-compare"><h3 class="subhead">Ten-year totals</h3>' +
       '<p class="caption" id="tax-compare-note">The goal is risk management and risk diversification. Route 1 is the offshore cell captive. Route 2 is offshore diversification through a dividend, and that investment is subject to capital gains tax. Net investment cost is the net Route 2 investment, the amount after corporate tax and dividends tax that is actually invested offshore. It is the hard cost used for both routes. For a fair comparison, your own capital and the trust/GBC costs paid outside the cell are deducted from the cell\'s value. Both IRRs use the same timing: that net Route 2 investment goes out at the end of each year, and the net offshore value comes in at the end of year 10.</p>' +
@@ -870,7 +924,11 @@ function taxComparison(m) {
       '<div id="irr-table">' +
       sheet("Ten-year comparison of the offshore cell captive and the dividend route", headers, [orsRow, divRow, advRow], "irr") +
       '</div>' +
-      '<p class="closing" id="structure-costs-note">Cash columns are the 10-year totals. Value columns are the position at the end of year 10. Route 1\'s bonuses are assumed to stay invested offshore in the trust and GBC on the same return and rand path as Route 2, from the year they are paid until year 10. The return is the cell\'s investment return after Mauritius tax on that income. Of the bonus growth, ' + esc(R(c.bonusFx)) + ' is the exchange-rate gain and ' + esc(R(c.bonusGrowth)) + ' is investment growth. Route 2\'s growth is already in its year-10 value, so its bonus-growth column is zero. For Route 2, the value after CT, DT and CGT is the year-10 offshore value, and it is the same as the net offshore value. For Route 1, that column is the cell value plus bonuses grown to year 10 plus claims paid, after Mauritius tax, and no separate capital gains tax is deducted. Less: structure costs is ' + esc(breakdown) + ' Route 2 has none. After CT, DT and CGT less structure costs equals the net offshore value.</p></div>'
+      '<div class="scenario-table" id="scenario-table">' +
+      '<h3 class="subhead">Scenario: sharper rand depreciation and higher US dollar return</h3>' +
+      sheet("Base inputs against rand weakening 6% a year and a 6% US dollar return", ["Result", "Base (your inputs)", "Upside (rand weakens 6% pa, USD return 6%)"], scenarioRows, false) +
+      '</div>' +
+      '<p class="closing" id="structure-costs-note">Cash columns are the 10-year totals. Value columns are the position at the end of year 10. The upside applies the same 6% rand weakening and 6% US dollar return to both routes. Route 1\'s bonuses are assumed to stay invested offshore in the trust and GBC on the same return and rand path as Route 2, from the year they are paid until year 10. The return is the cell\'s investment return after Mauritius tax on that income. Of the bonus growth on your inputs, ' + esc(R(c.bonusFx)) + ' is the exchange-rate gain and ' + esc(R(c.bonusGrowth)) + ' is investment growth. Route 2\'s growth is already in its year-10 value, so its bonus-growth column is zero. For Route 2, the value after CT, DT and CGT is the year-10 offshore value, and it is the same as the net offshore value. For Route 1, that column is the cell value plus bonuses grown to year 10 plus claims paid, after Mauritius tax, and no separate capital gains tax is deducted. Less: structure costs is ' + esc(breakdown) + ' Route 2 has none. After CT, DT and CGT less structure costs equals the net offshore value.</p></div>'
   };
 }
 
@@ -911,7 +969,8 @@ function view(m) {
       return '<li><div><p class="risk-name">' + esc(r.name) + '</p><p class="risk-group">' + esc(r.group) + '</p><p class="risk-detail">' + esc(r.detail) + '</p></div><button type="button" class="btn btn-small" data-remove="' + esc(r.id) + '" aria-label="Remove ' + esc(r.name) + '">Remove</button></li>';
     }).join("") + '</ul>';
 
-  var metrics = '<ul class="metrics">' +
+  var benefit = benefitStrip(cmp.c, cmp.up);
+  var metrics = benefit + '<ul class="metrics">' +
     '<li><p class="metric-value" data-metric="value">' + esc(Rm(m.y10.total)) + '</p><p class="metric-label">Value built after 10 years</p><p class="metric-detail">Cell value ' + esc(Rm(m.y10.cashZ)) + ' + no-claim bonuses ' + esc(Rm(m.totNcbZ)) + '</p></li>' +
     '<li><p class="metric-value pos" data-metric="ncb">' + esc(Rm(m.totNcbZ)) + '</p><p class="metric-label">No-claim bonuses paid, 10 years</p><p class="metric-detail" data-metric="ncb-detail">' + esc(U(m.totNcbU) + " in years 3, 6 and 9") + '</p></li>' +
     '<li><p class="metric-value pos" data-metric="tax">' + esc(R(cmp.c.year1Saving)) + '</p><p class="metric-label">Tax saving versus a dividend, year 1</p><p class="metric-detail">Company tax ' + esc(R(cmp.c.orsTax)) + ' and dividends tax ' + esc(R(cmp.c.divTaxAmount)) + ' avoided. After 10 years, ' + esc(cmp.ahead) + '.</p></li>' +
