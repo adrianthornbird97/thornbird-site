@@ -23,7 +23,7 @@ var COSTS = {
 };
 var CFO_REFERRAL_ZAR = 30000;
 var INV_NOTE = "FFG and Guardrisk are well versed in managing and securing low-risk, US dollar-based returns for clients.";
-var DEFAULTS = { premium: "5,000,000", fx: "16.60", dep: "3", inv: "4", claims: "0", esc: "5", taxable: "20,000,000", policies: "10", divTax: "20", marginal: "45" };
+var DEFAULTS = { premium: "1,000,000", fx: "16.60", dep: "3", inv: "4", claims: "0", esc: "5", taxable: "20,000,000", policies: "10", divTax: "20", marginal: "45" };
 var FX_PRESETS = [
   { value: "base", label: "Base: rand weakens 3% pa", dep: "3" },
   { value: "strong", label: "Rand strengthens 2% pa", dep: "-2" },
@@ -919,6 +919,7 @@ function view(m) {
   var assumptions = '<section class="block" aria-labelledby="s-prem"><div class="block-head"><div><h2 id="s-prem">3. Premium and assumptions</h2></div></div><div class="cols-3">' +
     '<div class="stack"><h3>Premium</h3>' +
     field("premium", "Annual premium you are willing to absorb (R, reinsured into the cell)", state.premiumS) +
+    '<dl class="premium-split"><div><dt>Premium</dt><dd>' + esc(R(m.P)) + '</dd></div><div><dt>Fronting fee</dt><dd>' + esc(R(m.y1.fronting)) + '<span class="basis">' + esc(pct(FRONTING)) + ' of the gross premium</span></dd></div><div><dt>Total first-year premium, including fronting</dt><dd>' + esc(R(m.y1.gross)) + '</dd></div></dl>' +
     (state.structure === "many" ? '<label class="field"><span>Policies in the shared cell (including yours)</span><select id="policies">' + pol + '</select></label><p class="result" id="policies-note">The shared cell goes live only once all 10 slots are filled.</p>' : '') +
     field("esc", "Premium increase per year (%)", state.escS) +
     '<p class="result">You pay ' + esc(R(m.y1.gross)) + ' in year 1 including the ' + esc(pct(FRONTING)) + ' fronting fee.</p></div>' +
