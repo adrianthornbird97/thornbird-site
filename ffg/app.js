@@ -122,7 +122,7 @@ function runModel(o) {
 }
 
 var state = {
-  structure: "one",
+  structure: "many",
   premiumS: DEFAULTS.premium,
   policiesS: DEFAULTS.policies,
   fxS: DEFAULTS.fx,
@@ -978,16 +978,14 @@ function render() {
 }
 
 function switchStructure(s) {
-  var premiumNow = state.premiumS;
+  var premiumNow = num(state.premiumS, 0);
   state.structure = s;
-  if (num(premiumNow, 0) < STRUCT[s].minPremium || (s === "many" && num(premiumNow, 0) === 5000000)) {
-    state.premiumS = fmt0(STRUCT[s].minPremium);
-  }
-  if (s === "one" && num(premiumNow, 0) < 5000000) state.premiumS = "5,000,000";
+  if (premiumNow < STRUCT[s].minPremium) state.premiumS = fmt0(STRUCT[s].minPremium);
 }
 
 function resetCase() {
-  state.premiumS = state.structure === "one" ? "5,000,000" : "1,000,000";
+  state.structure = "many";
+  state.premiumS = DEFAULTS.premium;
   state.policiesS = DEFAULTS.policies;
   state.fxS = DEFAULTS.fx;
   state.depS = DEFAULTS.dep;
