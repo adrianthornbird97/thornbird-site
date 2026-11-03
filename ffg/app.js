@@ -22,6 +22,7 @@ var COSTS = {
   many: { setup: 3000, annual: 1500, sharedSetup: 12000, sharedAnnual: 8000 }
 };
 var CFO_REFERRAL_ZAR = 30000;
+var INV_NOTE = "FFG and Guardrisk are well versed in managing and securing low-risk, US dollar-based returns for clients.";
 var DEFAULTS = { premium: "5,000,000", fx: "16.60", dep: "3", inv: "4", claims: "0", esc: "5", taxable: "20,000,000", policies: "10", divTax: "20", marginal: "45" };
 var FX_PRESETS = [
   { value: "base", label: "Base: rand weakens 3% pa", dep: "3" },
@@ -625,7 +626,7 @@ function clientRisks(m) {
     : "The plan assumes premiums rise " + pct(m.escPct / 100) + " a year. Lower or skipped premiums build less value.";
   var items = [
     ["Exchange rate", "The cell is held in US dollars, so if the rand strengthens, the rand value of the bonuses and the exit value goes down."],
-    ["Investment return", "Returns depend on where the cell's cash is invested and are not guaranteed."],
+    ["Investment return", "Returns depend on where the cell's cash is invested and are not guaranteed. " + INV_NOTE],
     ["Claims experience", "Actual claims reduce the bonuses roughly rand for rand."],
     ["Large or late claims", "A single large claim, or claims reported after the 7% reserve has been set, can absorb a whole bonus cycle."],
     ["Premium escalation", rise],
@@ -633,7 +634,7 @@ function clientRisks(m) {
     ["Shared-cell participation", "Applies to the one-to-many cell. Each policy is ring-fenced, and the risk of under-subscription is mitigated because a shared cell only goes live once all 10 slots are filled, so shared costs are always split ten ways."],
     ["Lock-in and timing of exit", "There is a minimum 3-year commitment. Leaving between bonus cycles gives up the surplus that has built up but not yet been paid out."],
     ["Tax deduction capacity", "The premium reduces tax only to the extent the company has taxable income in that year."],
-    ["Getting value out", "Bonuses are paid in US dollars to the GBC owned by your offshore trust. This risk is mitigated because the funds flow into a trust of which you are the ultimate beneficial owner (UBO), so the value stays under your control offshore."],
+    ["Getting value out", "Bonuses are paid in US dollars to the GBC owned by your offshore trust. This risk is mitigated because the funds flow into a trust of which you are the ultimate beneficial owner (UBO), so the value stays for your benefit offshore."],
     ["Counterparty and regulatory change", "The structure relies on Guardrisk, the fronting insurer, and the South African and Mauritian regulators. Changes in their rules or standing could affect it."]
   ];
   var list = '<ul class="risk-points">' + items.map(function (it, i) {
@@ -780,6 +781,7 @@ function exitSection(m) {
     '<h3>Claims ratio</h3>' + claimsTable(m) +
     '<h3 class="subhead">Exchange rate</h3>' + fxTable(m) +
     '<h3 class="subhead">Investment return</h3>' + invTable(m) +
+    '<p class="closing">' + esc(INV_NOTE) + '</p>' +
     clientRisks(m) + '</section>';
 }
 
@@ -852,6 +854,7 @@ function view(m) {
     '<p class="result">Year-10 rate: R' + esc(m.y10.fx.toFixed(2)) + ' per US$.</p></div>' +
     '<div class="stack"><h3>Cell performance</h3>' +
     field("inv", "Investment return on cell cash (% a year, US$)", state.invS) +
+    '<p class="result">' + esc(INV_NOTE) + '</p>' +
     field("claims", "Claims ratio (% of premium reinsured)", state.claimsS) +
     '<p class="result">Fixed costs: fronting ' + esc(pct(FRONTING)) + ', FFG management fee ' + esc(pct(FFG_FEE)) + ', Guardrisk ' + esc(pct(GR_PCT)) + ' (minimum ' + esc(U(GR_MIN)) + ' per cell a year), Mauritius tax ' + esc(pct(MU_TAX)) + ', IBNR reserve ' + esc(pct(IBNR)) + '.</p></div>' +
     '</div>';
