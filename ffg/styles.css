@@ -140,6 +140,34 @@ p { margin: 0; }
 
 .consult-lede { margin-top: 10px; }
 
+.premium-split { margin: 2px 0 0; }
+.premium-split div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 5px 0;
+  border-top: 1px solid var(--line);
+}
+.premium-split dt {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.premium-split dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--navy);
+}
+.premium-split .basis {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
 /* Letterhead */
 .brand {
   border-radius: 14px;
@@ -859,7 +887,7 @@ table.exit-fit th.num { white-space: normal; }
     grid-auto-flow: column;
     column-gap: 18px;
   }
-  tr, .callout, .risk-points li, .compare-card, .preamble { break-inside: avoid; }
+  tr, .callout, .risk-points li, .compare-card, .preamble, .premium-split { break-inside: avoid; }
   .tax-compare .compare,
   .tax-compare .cols-2 { grid-template-columns: 1fr 1fr; }
   .tax-compare .cols-3 { grid-template-columns: 1fr 1fr 1fr; }
