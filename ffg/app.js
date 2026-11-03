@@ -217,8 +217,8 @@ function sheet(caption, headers, bodyRows, wide) {
     if (row.memo) cls.push("memo");
     return '<tr' + (cls.length ? ' class="' + cls.join(" ") + '"' : '') + (row.year ? ' data-year="' + row.year + '"' : '') + '>' + cells + '</tr>';
   }).join("");
-  var kind = wide === true ? "wide" : (wide === "compact" || wide === "exit") ? "compact" : "mid";
-  var hint = kind === "mid" ? " until-mid" : "";
+  var kind = wide === true ? "wide" : (wide === "compact" || wide === "exit") ? "compact" : wide === "irr" ? "irr" : "mid";
+  var hint = kind === "mid" ? " until-mid" : kind === "irr" ? " irr-hint" : "";
   var extra = wide === "exit" ? " exit-fit" : "";
   return '<div class="sheet-wrap"><p class="scroll-hint' + hint + '">Scroll sideways for every column.</p><div class="sheet"><table class="' + kind + extra + '"><caption class="vh">' + esc(caption) + '</caption><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table></div></div>';
 }
@@ -661,16 +661,24 @@ function dividendCompare(m) {
   var gross1 = m.y1.gross;
   var usd = 0;
   var divInvested = 0;
-  var orsInvested = 0;
+  var preTax = 0;
+  var companyTax = 0;
+  var dividendsTax = 0;
+  var fees = 0;
   var structCost = 0;
+  var grosses = [];
   var i;
   for (i = 0; i < m.rows.length; i++) {
     var r = m.rows[i];
     usd = usd * (1 + m.inv);
     var put = r.gross * offshoreRate;
     divInvested += put;
-    orsInvested += r.gross;
+    preTax += r.gross;
+    companyTax += r.gross * SA_CIT;
+    dividendsTax += r.gross * divOnGross;
+    fees += r.fronting + (r.ffg + r.gr + r.mtax) * r.fx;
     structCost += r.structZ;
+    grosses.push(r.gross);
     usd += put / r.fx;
   }
   var before = usd * m.y10.fx;
@@ -680,7 +688,20 @@ function dividendCompare(m) {
   var orsGross = m.y10.total + claimsPaidZ(m.rows);
   var capitalY10 = m.capitalUsd * m.y10.fx;
   var referral = CFO_REFERRAL_ZAR;
-  var orsFromPremium = orsGross - capitalY10 - structCost - referral;
+  var outside = capitalY10 + structCost + referral;
+  var orsFromPremium = orsGross - outside;
+  var afterTax = preTax * (1 - SA_CIT);
+  var hardCost = divInvested;
+  var divCfs = grosses.map(function (g, idx) {
+    var out = g * offshoreRate;
+    return idx === grosses.length - 1 ? -out + after : -out;
+  });
+  var orsCfs = grosses.map(function (g, idx) {
+    var out = g * offshoreRate;
+    return idx === grosses.length - 1 ? -out + orsFromPremium : -out;
+  });
+  var divIrr = solveIrr(divCfs);
+  var orsIrr = solveIrr(orsCfs);
   return {
     divTax: divTax,
     marginal: marginal,
@@ -694,7 +715,13 @@ function dividendCompare(m) {
     orsOffshore1: gross1,
     divOffshore1: gross1 * offshoreRate,
     divInvested: divInvested,
-    orsInvested: orsInvested,
+    hardCost: hardCost,
+    preTax: preTax,
+    afterTax: afterTax,
+    companyTax: companyTax,
+    dividendsTax: dividendsTax,
+    fees: fees,
+    growth: before - divInvested,
     before: before,
     cgt: cgt,
     after: after,
@@ -702,77 +729,110 @@ function dividendCompare(m) {
     capitalY10: capitalY10,
     structCost: structCost,
     referral: referral,
+    outside: outside,
     orsFromPremium: orsFromPremium,
-    advantage: orsFromPremium - after
+    advantage: orsFromPremium - after,
+    divIrr: divIrr,
+    orsIrr: orsIrr,
+    irrAdvantage: divIrr === null || orsIrr === null ? null : orsIrr - divIrr
   };
-}
-
-function compareCard(title, lines) {
-  return '<div class="compare-card"><h3>' + esc(title) + '</h3><dl class="props">' + lines.map(function (it) {
-    return '<div><dt>' + esc(it[0]) + '</dt><dd' + (it[2] ? ' class="pos"' : '') + '>' + esc(it[1]) + '</dd></div>';
-  }).join("") + '</dl></div>';
 }
 
 function moneyM(v) {
   return (v < 0 ? "-" : "") + Rm(Math.abs(v));
 }
 
-function compareBars(c) {
-  var max = Math.max(c.after, c.orsFromPremium, 1);
-  function row(label, value, color) {
-    var w = Math.max(0, value) / max * 100;
-    return '<div class="bar-row"><span class="bar-label">' + esc(label) + '</span><span class="bar-track"><span class="bar-fill" style="width:' + w.toFixed(1) + '%;background:' + color + '"></span></span><span class="bar-val">' + esc(moneyM(value)) + '</span></div>';
+function npv(rate, cfs) {
+  var sum = 0;
+  var i;
+  for (i = 0; i < cfs.length; i++) sum += cfs[i] / Math.pow(1 + rate, i + 1);
+  return sum;
+}
+
+function solveIrr(cfs) {
+  var lo = -0.999;
+  var hi = 5;
+  var fLo = npv(lo, cfs);
+  var fHi = npv(hi, cfs);
+  var guard = 0;
+  while (fLo * fHi > 0 && hi < 1e6 && guard < 40) {
+    hi = hi * 2 + 1;
+    fHi = npv(hi, cfs);
+    guard++;
   }
-  var label = "Value from the premium at year 10. Dividend route " + moneyM(c.after) + ". ORS cell " + moneyM(c.orsFromPremium) + ".";
-  return '<div class="bars" role="img" aria-label="' + esc(label) + '">' +
-    row("Dividend route, after CGT", c.after, "#8C6239") +
-    row("ORS value from the premium", c.orsFromPremium, "#1B2A4A") +
-    '</div>';
+  if (!(fLo * fHi < 0) && fLo !== 0 && fHi !== 0) return null;
+  var i;
+  for (i = 0; i < 80; i++) {
+    var mid = (lo + hi) / 2;
+    var fMid = npv(mid, cfs);
+    if (Math.abs(hi - lo) < 1e-9) return mid;
+    if (fLo * fMid <= 0) { hi = mid; fHi = fMid; }
+    else { lo = mid; fLo = fMid; }
+  }
+  return (lo + hi) / 2;
+}
+
+function irrText(v) {
+  if (v === null || !isFinite(v)) return "–";
+  return (v * 100).toFixed(1) + "%";
+}
+
+function ptsText(v) {
+  if (v === null || !isFinite(v)) return "–";
+  var n = (v * 100).toFixed(1);
+  return (v > 0 ? "+" : "") + n + " pts";
+}
+
+function routeCells(label, values, flags) {
+  var cells = [cell(label)].concat(values.map(function (v) {
+    if (v === null) return cell("–");
+    if (typeof v === "string") return cell(v);
+    return cell(R(v), !!(flags && flags.pos && v > 0));
+  }));
+  return { total: !!(flags && flags.total), cells: cells };
+}
+
+function multipleText(net, cost) {
+  if (!(cost > 0) || !isFinite(net)) return "–";
+  return (net / cost).toFixed(2) + "x";
+}
+
+function multipleGap(a, b) {
+  if (!isFinite(a) || !isFinite(b)) return "–";
+  var d = a - b;
+  return (d > 0 ? "+" : "") + d.toFixed(2) + "x";
 }
 
 function taxComparison(m) {
   var c = dividendCompare(m);
-  var yearRows = [
-    { cells: [cell("Amount invested, 10 years"), cell(R(c.divInvested)), cell(R(c.orsInvested))] },
-    { cells: [cell("Value at year 10, before deductions"), cell(R(c.before)), cell(R(c.orsGross))] },
-    { cells: [cell("Less: CGT on sale"), cell(R(-c.cgt)), cell("–")] },
-    { cells: [cell("Less: your capital, at the year-10 rate"), cell("–"), cell(R(-c.capitalY10))] },
-    { cells: [cell("Less: trust and GBC costs"), cell("–"), cell(R(-c.structCost))] },
-    { cells: [cell("Less: CFO Centre referral"), cell("–"), cell(R(-c.referral))] },
-    { sub: true, cells: [cell("Value from the premium"), cell(R(c.after)), cell(R(c.orsFromPremium), c.orsFromPremium > 0)] },
-    { total: true, cells: [cell("ORS advantage"), cell(""), cell(R(c.advantage), c.advantage > 0)] }
-  ];
-  var ahead = moneyM(c.advantage) + (c.advantage >= 0 ? " more than the dividend route after CGT" : " versus the dividend route after CGT");
+  var divMultiple = c.hardCost > 0 ? c.after / c.hardCost : null;
+  var orsMultiple = c.hardCost > 0 ? c.orsFromPremium / c.hardCost : null;
+  var headers = ["Route", "Pre-tax amount", "After corporate tax", "After CT and dividends tax", "Net investment cost", "After CT, DT and CGT", "Net offshore value", "Value / cost", "IRR"];
+  var divRow = routeCells("Route 2: Offshore diversification (dividend route)", [c.preTax, c.afterTax, c.divInvested, c.hardCost, c.after, c.after]);
+  divRow.cells.push(cell(multipleText(c.after, c.hardCost)));
+  divRow.cells.push(cell(irrText(c.divIrr)));
+  var orsRow = routeCells("Route 1: Offshore cell captive", [c.preTax, c.afterTax, c.preTax, c.hardCost, c.orsGross, c.orsFromPremium]);
+  orsRow.cells.push(cell(multipleText(c.orsFromPremium, c.hardCost), c.orsFromPremium > c.hardCost));
+  orsRow.cells.push(cell(irrText(c.orsIrr)));
+  var advRow = routeCells("Advantage", [0, 0, c.preTax - c.divInvested, 0, c.orsGross - c.after, c.advantage], { total: true, pos: true });
+  advRow.cells.push(cell(multipleGap(orsMultiple, divMultiple), orsMultiple > divMultiple));
+  advRow.cells.push(cell(ptsText(c.irrAdvantage), c.irrAdvantage > 0));
+  var ahead = moneyM(c.advantage) + (c.advantage >= 0 ? " more than the dividend route" : " versus the dividend route");
+  if (c.irrAdvantage !== null) ahead += ", " + ptsText(c.irrAdvantage) + " a year on the IRR";
   return {
     c: c,
     ahead: ahead,
-    html: '<div class="tax-compare" id="tax-compare"><h3 class="subhead">Compared with taking a dividend</h3>' +
-      '<p class="caption">The alternative assumes you take the same amount out of your company as a dividend and invest it offshore personally within your offshore allowance. That route pays company tax, dividends tax and, on sale, capital gains tax on the growth. For a fair comparison, your own capital and the trust/GBC costs paid outside the cell are deducted from the ORS value.</p>' +
+    html: '<div class="tax-compare" id="tax-compare"><h3 class="subhead">Ten-year totals</h3>' +
+      '<p class="caption" id="tax-compare-note">The goal is risk management and risk diversification. Route 1 is the offshore cell captive. Route 2 is offshore diversification through a dividend, and that investment is subject to capital gains tax. Net investment cost is the net Route 2 investment, the amount after corporate tax and dividends tax that is actually invested offshore. It is the hard cost used for both routes. For a fair comparison, your own capital and the trust/GBC costs paid outside the cell are deducted from the cell\'s value. Both IRRs use the same timing: that net Route 2 investment goes out at the end of each year, and the net offshore value comes in at the end of year 10.</p>' +
       '<div class="cols-3">' +
       field("div-tax", "Dividends tax (%)", state.divTaxS) +
       field("marginal", "Your marginal income tax rate (%)", state.marginalS) +
       '<div class="field"><span>Capital gains tax</span><p class="cgt-note">Inclusion rate ' + esc(pct(CGT_INCLUSION)) + ', fixed. Effective rate ' + esc(pct(c.cgtRate)) + ' (' + esc(pct(CGT_INCLUSION)) + ' × your ' + esc(pct(c.marginal)) + ' marginal rate).</p></div>' +
       '</div>' +
-      '<h3 class="subhead">Year 1, on the premium of ' + esc(R(c.orsOffshore1)) + '</h3>' +
-      '<div class="compare">' +
-      compareCard("Through the ORS cell", [
-        ["Company tax saved", R(c.orsTax) + " (" + pct(SA_CIT) + " of the premium)", true],
-        ["Dividends tax", "None. The premium is not paid out as a dividend."],
-        ["Invested offshore", R(c.orsOffshore1) + " (the full premium)"]
-      ]) +
-      compareCard("Dividend route", [
-        ["Company tax", R(c.orsTax) + " (" + pct(SA_CIT) + ")"],
-        ["Dividends tax", R(c.divTaxAmount) + " (" + pct(c.divTax) + " of the " + pct(1 - SA_CIT) + " left, " + pct(c.divOnGross) + " of the premium)"],
-        ["Combined tax", R(c.year1Saving) + " (" + pct(c.combined) + ")"],
-        ["Invested offshore", R(c.divOffshore1) + " (" + pct(c.offshoreRate) + " of the premium)"]
-      ]) +
+      '<div id="irr-table">' +
+      sheet("Ten-year comparison of the offshore cell captive and the dividend route", headers, [orsRow, divRow, advRow], "irr") +
       '</div>' +
-      callout("good", "Tax saving versus the dividend route: " + R(c.year1Saving) + ".", "Company tax of " + R(c.orsTax) + " and dividends tax of " + R(c.divTaxAmount) + " avoided. " + R(c.orsOffshore1) + " goes into the cell, against " + R(c.divOffshore1) + " reaching you offshore as a dividend.") +
-      '<h3 class="subhead">Ten years, in rand at year 10</h3>' +
-      '<div class="cols-2"><div>' +
-      sheet("ORS cell against a dividend invested offshore", ["Item", "Dividend route", "ORS cell"], yearRows, false) +
-      '</div><div><h3>Value after tax</h3>' + compareBars(c) +
-      '<p class="closing">Bonuses flow to your offshore trust and its GBC. The ORS value from the premium starts with the total value built plus claims paid to your company, then deducts your capital at the year-10 exchange rate, the trust and GBC costs paid outside the cell, and the CFO Centre referral.</p></div></div></div>'
+      '<p class="closing">Cash columns are the 10-year totals. Value columns are the position at the end of year 10. For the dividend route, the value after CT, DT and CGT is the year-10 offshore value, and it is the same as the net offshore value. For the cell, that column is the value after Mauritius tax, and no separate capital gains tax is deducted. The cell\'s net offshore value then deducts your capital at the year-10 rate, the trust and GBC costs and the R30,000 CFO Centre referral. Bonuses flow to your offshore trust and its GBC.</p></div>'
   };
 }
 

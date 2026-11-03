@@ -132,6 +132,12 @@ p { margin: 0; }
   font-size: 1.05rem;
 }
 
+.preamble {
+  max-width: 72ch;
+  margin: 22px 0 0;
+  color: var(--ink);
+}
+
 .consult-lede { margin-top: 10px; }
 
 /* Letterhead */
@@ -548,6 +554,7 @@ textarea:-webkit-autofill {
 /* Tables — unfilled results */
 .sheet-wrap { margin-top: 8px; }
 .scroll-hint { display: none; margin: 0 0 8px; font-size: 13px; color: var(--muted); }
+.scroll-hint.irr-hint { display: block; }
 .sheet {
   overflow-x: auto;
   max-width: 100%;
@@ -606,6 +613,19 @@ table.wide td:first-child {
   box-shadow: 1px 0 0 rgba(27, 42, 74, 0.08);
 }
 table.wide th, table.wide td { white-space: nowrap; }
+table.irr { min-width: 1240px; }
+table.irr th, table.irr td { padding: 8px 6px; }
+table.irr th { white-space: normal; line-height: 1.25; letter-spacing: 0.02em; }
+table.irr td:first-child { white-space: normal; font-weight: 600; }
+table.irr .num { white-space: nowrap; }
+table.irr th:first-child,
+table.irr td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: #fff;
+  box-shadow: 1px 0 0 rgba(27, 42, 74, 0.08);
+}
 table.compact { width: 100%; }
 table.compact th, table.compact td { padding: 8px 4px; }
 table.compact th { white-space: normal; line-height: 1.25; letter-spacing: 0.02em; }
@@ -819,9 +839,19 @@ table.exit-fit th.num { white-space: normal; }
     letter-spacing: 0;
   }
   table.wide th:first-child,
-  table.wide td:first-child {
+  table.wide td:first-child,
+  table.irr th:first-child,
+  table.irr td:first-child {
     position: static;
     box-shadow: none;
+  }
+  table.irr { min-width: 0; width: 100%; }
+  table.irr th,
+  table.irr td {
+    white-space: normal;
+    padding: 2px 3px;
+    font-size: 7.5px;
+    letter-spacing: 0;
   }
   .risk-points {
     grid-template-columns: 1fr 1fr;
@@ -829,7 +859,7 @@ table.exit-fit th.num { white-space: normal; }
     grid-auto-flow: column;
     column-gap: 18px;
   }
-  tr, .callout, .risk-points li, .compare-card { break-inside: avoid; }
+  tr, .callout, .risk-points li, .compare-card, .preamble { break-inside: avoid; }
   .tax-compare .compare,
   .tax-compare .cols-2 { grid-template-columns: 1fr 1fr; }
   .tax-compare .cols-3 { grid-template-columns: 1fr 1fr 1fr; }
