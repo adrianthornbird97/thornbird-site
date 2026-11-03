@@ -81,7 +81,8 @@ function esc(s) {
 function runModel(o) {
   var share = 1 / o.n;
   var rows = [];
-  var prevIr = 0, prevCash = 0, capHeld = 0, cumNcbZ = 0, cumOutlay = 0;
+  var prevIr = 0, prevCash = 0, capHeld = 0, cumNcbZ = 0, cumOutlay = 0, fundUsd = 0;
+  var bonusRate = o.inv * (1 - MU_TAX);
   for (var y = 1; y <= 10; y++) {
     var fx = o.fx0 * Math.pow(1 + o.dep, y - 1);
     var pz = o.P * Math.pow(1 + o.esc, y - 1) * o.n;
@@ -102,7 +103,10 @@ function runModel(o) {
     var cp = oc + pu - ffg - gr - cl - tx + ii;
     var nb = y % NCB_CYCLE === 0 ? Math.max(0, cp - capHeld - ir) : 0;
     var cash = cp - nb;
-    cumNcbZ += nb * fx * share;
+    var ncbShare = nb * share;
+    fundUsd = fundUsd * (1 + bonusRate) + ncbShare;
+    var fundZ = fundUsd * fx;
+    cumNcbZ += ncbShare * fx;
     var c = COSTS[o.s];
     var structUsd = (y === 1 ? c.setup : 0) + c.annual + ((y === 1 ? c.sharedSetup : 0) + c.sharedAnnual) * share;
     var grossMine = gz * share;
@@ -112,8 +116,9 @@ function runModel(o) {
     rows.push({
       y: y, fx: fx, gross: grossMine, fronting: (gz - pz) * share, risk: pz * share, pu: pu * share,
       ffg: ffg * share, gr: gr * share, claims: cl * share, ibnr: ic * share, uw: uw * share,
-      inv: ii * share, mtax: tx * share, ncb: nb * share, ncbZ: nb * fx * share, cumNcbZ: cumNcbZ,
-      cash: cash * share, cashZ: cash * fx * share, total: cash * fx * share + cumNcbZ,
+      inv: ii * share, mtax: tx * share, ncb: ncbShare, ncbZ: ncbShare * fx, cumNcbZ: cumNcbZ,
+      fund: fundUsd, fundZ: fundZ,
+      cash: cash * share, cashZ: cash * fx * share, total: cash * fx * share + fundZ,
       taxSave: taxSave, afterTax: grossMine - taxSave, structZ: structUsd * fx, capZ: capZ, cumOutlay: cumOutlay
     });
     prevIr = ir;
@@ -248,8 +253,8 @@ function lineChart(m) {
   var iw = w - pad.l - pad.r;
   var ih = h - pad.t - pad.b;
   var series = [
-    { name: "Total value (cell + bonuses)", color: "#1B2A4A", width: 2.25, dash: "", values: m.rows.map(function (r) { return r.total / 1e6; }) },
-    { name: "No-claim bonuses paid to date", color: "#2F5E80", width: 1.75, dash: "", values: m.rows.map(function (r) { return r.cumNcbZ / 1e6; }) },
+    { name: "Total value (cell + bonus fund)", color: "#1B2A4A", width: 2.25, dash: "", values: m.rows.map(function (r) { return r.total / 1e6; }) },
+    { name: "Bonus fund (offshore, grown)", color: "#2F5E80", width: 1.75, dash: "", values: m.rows.map(function (r) { return r.fundZ / 1e6; }) },
     { name: "Cell value", color: "#4F7390", width: 1.75, dash: "", values: m.rows.map(function (r) { return r.cashZ / 1e6; }) },
     { name: "Cumulative after-tax cost incl. capital, trust/GBC and referral", color: "#8C6239", width: 1.75, dash: "5 4", values: m.rows.map(function (r) { return r.cumOutlay / 1e6; }) }
   ];
@@ -524,7 +529,7 @@ function feeSection(m) {
     '<h3 class="subhead">Ongoing costs (every year)</h3>' +
     sheet("Ongoing costs, year 1 and the 10-year total", headers, ongoingRows, false) +
     '<p class="closing" id="fee-pct-note">' + esc(ongoingNote(f)) + '</p>' +
-    '<p class="closing">The IBNR line is the claims reserve held in the cell and released into later bonuses. It is not a fee, and it is left out of the totals.</p>' +
+    '<p class="closing">The IBNR line is the claims reserve held in the cell and released into later bonuses. It is not a fee, and it is left out of the totals. Growth on bonuses held in your offshore trust and GBC is not a cost either. Mauritius tax on that income is already in the net growth rate.</p>' +
     '<h3 class="subhead">Cost by year</h3>' +
     sheet("Cost by year in rand", ["Year", "Fronting", "FFG fee", "Guardrisk", "Mauritius tax", "Running costs", "Ongoing", "Once-off", "Total"], perRows, "compact") +
     '<p class="closing">' + esc(foot) + '</p></section>';
@@ -626,16 +631,16 @@ function clientRisks(m) {
     ? "The plan assumes premiums change by " + pct(m.escPct / 100) + " a year. Lower or skipped premiums build less value."
     : "The plan assumes premiums rise " + pct(m.escPct / 100) + " a year. Lower or skipped premiums build less value.";
   var items = [
-    ["Exchange rate", "The cell is held in US dollars, so if the rand strengthens, the rand value of the bonuses and the exit value goes down."],
-    ["Investment return", "Returns depend on where the cell's cash is invested and are not guaranteed. " + INV_NOTE],
+    ["Exchange rate", "The cell and the bonus fund are held in US dollars, so if the rand strengthens, the rand value of the bonuses and the exit value goes down."],
+    ["Investment return", "Returns on the cell, and on bonuses kept invested in your offshore trust and GBC, depend on where the cash is invested and are not guaranteed. Mauritius tax on the fund's income is already in the net growth rate. " + INV_NOTE],
     ["Claims experience", "Actual claims reduce the bonuses roughly rand for rand."],
     ["Large or late claims", "A single large claim, or claims reported after the 7% reserve has been set, can absorb a whole bonus cycle."],
     ["Premium escalation", rise],
     ["Guardrisk minimum fee", "At smaller premiums the " + U(GR_MIN) + "-a-year minimum is a larger share of the premium."],
     ["Shared-cell participation", "Applies to the one-to-many cell. Each policy is ring-fenced, and the risk of under-subscription is mitigated because a shared cell only goes live once all 10 slots are filled, so shared costs are always split ten ways."],
-    ["Lock-in and timing of exit", "There is a minimum 3-year commitment. Leaving between bonus cycles gives up the surplus that has built up but not yet been paid out."],
+    ["Lock-in and timing of exit", "There is a minimum 3-year commitment. Leaving between bonus cycles gives up the surplus still in the cell that has not yet been paid out. Bonuses already paid stay invested in your offshore trust and GBC."],
     ["Tax deduction capacity", "The premium reduces tax only to the extent the company has taxable income in that year."],
-    ["Getting value out", "Bonuses are paid in US dollars to the GBC owned by your offshore trust. This risk is mitigated because the funds flow into a trust of which you are the ultimate beneficial owner (UBO), so the value stays for your benefit offshore."],
+    ["Getting value out", "Bonuses are paid in US dollars to the GBC owned by your offshore trust and stay invested there on the same US dollar return and rand path, for your benefit. This risk is mitigated because the funds flow into a trust of which you are the ultimate beneficial owner (UBO)."],
     ["Counterparty and regulatory change", "The structure relies on Guardrisk, the fronting insurer, and the South African and Mauritian regulators. Changes in their rules or standing could affect it."]
   ];
   var list = '<ul class="risk-points">' + items.map(function (it, i) {
@@ -686,27 +691,23 @@ function dividendCompare(m) {
   var gain = before - divInvested;
   var cgt = Math.max(0, gain) * cgtRate;
   var after = before - cgt;
-  var orsGross = m.y10.total + claimsPaidZ(m.rows);
   var capitalY10 = m.capitalUsd * m.y10.fx;
   var referral = CFO_REFERRAL_ZAR;
   var outside = capitalY10 + structCost + referral;
-  var bonusRate = m.inv * (1 - MU_TAX);
   var fx10 = m.y10.fx;
-  var grownRand = 0;
-  var paidRand = 0;
+  var grownRand = m.y10.fundZ;
+  var paidRand = m.y10.cumNcbZ;
   var fxOnlyRand = 0;
   for (i = 0; i < m.rows.length; i++) {
     var bonus = m.rows[i];
     if (!(bonus.ncb > 0)) continue;
-    var held = Math.pow(1 + bonusRate, 10 - bonus.y);
-    grownRand += bonus.ncb * held * fx10;
-    paidRand += bonus.ncb * bonus.fx;
     fxOnlyRand += bonus.ncb * fx10;
   }
   var bonusUplift = grownRand - paidRand;
   var bonusFx = fxOnlyRand - paidRand;
   var bonusGrowth = grownRand - fxOnlyRand;
-  var orsAfterTaxes = orsGross + bonusUplift;
+  var orsAfterTaxes = m.y10.total + claimsPaidZ(m.rows);
+  var orsGross = orsAfterTaxes;
   var orsFromPremium = orsAfterTaxes - outside;
   var afterTax = preTax * (1 - SA_CIT);
   var hardCost = divInvested;
@@ -853,7 +854,7 @@ function scenarioModel(m, dep, inv) {
 function benefitStrip(c, up) {
   var irrDetail = pointsWords(c.irrAdvantage) + " on the same net investment cost of " + Rm(c.hardCost) + ".";
   irrDetail += " Upside scenario: " + irrText(up.orsIrr) + " vs " + irrText(up.divIrr) + ".";
-  var bonusDetail = "Bonuses kept invested offshore to year 10: " + moneyM(c.bonusFx) + " exchange-rate gain + " + moneyM(c.bonusGrowth) + " growth.";
+  var bonusDetail = "Paid to your offshore trust and GBC and kept invested to year 10: " + moneyM(c.bonusFx) + " exchange-rate gain + " + moneyM(c.bonusGrowth) + " growth.";
   var advWord = c.advantage >= 0 ? "More than the dividend route." : "Less than the dividend route.";
   var upWord = up.advantage >= 0 ? " more." : " less.";
   var advDetail = advWord + " Upside scenario: " + Rm(Math.abs(up.advantage)) + upWord;
@@ -928,12 +929,12 @@ function taxComparison(m) {
       '<h3 class="subhead">Scenario: sharper rand depreciation and higher US dollar return</h3>' +
       sheet("Base inputs against rand weakening 6% a year and a 6% US dollar return", ["Result", "Base (your inputs)", "Upside (rand weakens 6% pa, USD return 6%)"], scenarioRows, false) +
       '</div>' +
-      '<p class="closing" id="structure-costs-note">Cash columns are the 10-year totals. Value columns are the position at the end of year 10. The upside applies the same 6% rand weakening and 6% US dollar return to both routes. Route 1\'s bonuses are assumed to stay invested offshore in the trust and GBC on the same return and rand path as Route 2, from the year they are paid until year 10. The return is the cell\'s investment return after Mauritius tax on that income. Of the bonus growth on your inputs, ' + esc(R(c.bonusFx)) + ' is the exchange-rate gain and ' + esc(R(c.bonusGrowth)) + ' is investment growth. Route 2\'s growth is already in its year-10 value, so its bonus-growth column is zero. For Route 2, the value after CT, DT and CGT is the year-10 offshore value, and it is the same as the net offshore value. For Route 1, that column is the cell value plus bonuses grown to year 10 plus claims paid, after Mauritius tax, and no separate capital gains tax is deducted. Less: structure costs is ' + esc(breakdown) + ' Route 2 has none. After CT, DT and CGT less structure costs equals the net offshore value.</p></div>'
+      '<p class="closing" id="structure-costs-note">Cash columns are the 10-year totals. Value columns are the position at the end of year 10. The upside applies the same 6% rand weakening and 6% US dollar return to both routes. Route 1\'s year-10 value already includes bonuses paid to the GBC owned by your offshore trust. They stay invested there on the same US dollar return and rand path, for your benefit. The return is the cell\'s investment return after Mauritius tax on that income. That tax is already in the net growth rate, and the growth is not a cost. Bonus growth offshore is the year-10 fund minus the bonuses at the rand value on the day they were paid. Of that growth on your inputs, ' + esc(R(c.bonusFx)) + ' is the exchange-rate gain and ' + esc(R(c.bonusGrowth)) + ' is investment growth. Route 2\'s growth is already in its year-10 value, so its bonus-growth column is zero. For Route 2, the value after CT, DT and CGT is the year-10 offshore value, and it is the same as the net offshore value. For Route 1, that column is the model\'s year-10 total, the cell value plus the grown bonus fund, plus claims paid, after Mauritius tax, and no separate capital gains tax is deducted. Less: structure costs is ' + esc(breakdown) + ' Route 2 has none. After CT, DT and CGT less structure costs equals the net offshore value.</p></div>'
   };
 }
 
 function exitSection(m) {
-  return '<section class="block" id="exit-value" aria-labelledby="s-exit"><div class="block-head"><div><h2 id="s-exit">5. Exit value: what could change it</h2><p class="caption">The cell is held in US dollars, so a stronger rand lowers the rand value at exit. Returns depend on where the cell\'s cash is invested. Claims reduce the bonus roughly rand for rand. Claims are paid out of your cell to your company, so higher claims lower the bonus but are returned to you as cover. None of these figures are guaranteed. Your capital and the claims reserve stay in the cell. Net value is the total value built plus claims paid to your company, minus the cumulative after-tax cost. In each table, only that one assumption changes, and the highlighted row is your current input or the nearest step shown.</p></div></div>' +
+  return '<section class="block" id="exit-value" aria-labelledby="s-exit"><div class="block-head"><div><h2 id="s-exit">5. Exit value: what could change it</h2><p class="caption">The cell is held in US dollars, so a stronger rand lowers the rand value at exit. No-claim bonuses are paid to the GBC owned by your offshore trust and stay invested there on the same US dollar return and rand path, for your benefit. Mauritius tax on that income is already in the net growth rate, and the growth is not a cost. Returns depend on where the cash is invested. Claims reduce the bonus roughly rand for rand. Claims are paid out of your cell to your company, so higher claims lower the bonus but are returned to you as cover. None of these figures are guaranteed. Your capital and the claims reserve stay in the cell. The bonus columns are the amounts paid. Total value built is the cell value plus those bonuses grown to the end of year 10. Net value is that total plus claims paid to your company, minus the cumulative after-tax cost. In each table, only that one assumption changes, and the highlighted row is your current input or the nearest step shown.</p></div></div>' +
     '<h3>Claims ratio</h3>' + claimsTable(m) +
     '<h3 class="subhead">Exchange rate</h3>' + fxTable(m) +
     '<h3 class="subhead">Investment return</h3>' + invTable(m) +
@@ -971,8 +972,8 @@ function view(m) {
 
   var benefit = benefitStrip(cmp.c, cmp.up);
   var metrics = benefit + '<ul class="metrics">' +
-    '<li><p class="metric-value" data-metric="value">' + esc(Rm(m.y10.total)) + '</p><p class="metric-label">Value built after 10 years</p><p class="metric-detail">Cell value ' + esc(Rm(m.y10.cashZ)) + ' + no-claim bonuses ' + esc(Rm(m.totNcbZ)) + '</p></li>' +
-    '<li><p class="metric-value pos" data-metric="ncb">' + esc(Rm(m.totNcbZ)) + '</p><p class="metric-label">No-claim bonuses paid, 10 years</p><p class="metric-detail" data-metric="ncb-detail">' + esc(U(m.totNcbU) + " in years 3, 6 and 9") + '</p></li>' +
+    '<li><p class="metric-value" data-metric="value">' + esc(Rm(m.y10.total)) + '</p><p class="metric-label">Value built after 10 years</p><p class="metric-detail">Cell value ' + esc(Rm(m.y10.cashZ)) + ' + bonus fund ' + esc(Rm(m.y10.fundZ)) + '</p></li>' +
+    '<li><p class="metric-value pos" data-metric="ncb">' + esc(Rm(m.totNcbZ)) + '</p><p class="metric-label">No-claim bonuses paid, 10 years</p><p class="metric-detail" data-metric="ncb-detail">' + esc(U(m.totNcbU) + " paid in years 3, 6 and 9. Grown to " + Rm(m.y10.fundZ) + " in your trust and GBC by year 10.") + '</p></li>' +
     '<li><p class="metric-value pos" data-metric="tax">' + esc(R(cmp.c.year1Saving)) + '</p><p class="metric-label">Tax saving versus a dividend, year 1</p><p class="metric-detail">Company tax ' + esc(R(cmp.c.orsTax)) + ' and dividends tax ' + esc(R(cmp.c.divTaxAmount)) + ' avoided. After 10 years, ' + esc(cmp.ahead) + '.</p></li>' +
     '<li><p class="metric-value" data-metric="capital">' + esc(R(m.capitalZar)) + '</p><p class="metric-label">Your capital into the cell</p><p class="metric-detail">' + esc(pct(m.st.capitalPct) + " of year-1 premium (" + U(m.capitalUsd) + "), funded via your trust") + '</p></li>' +
     '</ul>';
@@ -987,9 +988,9 @@ function view(m) {
       ["Minimum premium", R(m.st.minPremium) + " a year" + (state.structure === "many" ? ", for at least 3 years" : "")],
       ["Client capital", pct(m.st.capitalPct) + " of year-1 premium, held in the cell and returned at exit"],
       ["Policies in the cell", state.structure === "one" ? "1 (yours only)" : m.n + " of a maximum " + MAX_POLICIES],
-      ["No-claim bonus", "Underwriting surplus paid out every 3 years"]
+      ["No-claim bonus", "Underwriting surplus paid to your offshore trust's GBC every 3 years, and kept invested there"]
     ]) +
-    '</div><div class="ruled"><h3>How the cover flows</h3><p class="flow">Your company pays the premium to a South African insurer, which keeps a ' + esc(pct(FRONTING)) + ' fronting fee and reinsures the risk into your cell in Mauritius, in US dollars. The cell is administered by Guardrisk and owned through a Mauritian company (GBC) held by your offshore trust. Claims are paid from the cell; what is not needed for claims comes back to the GBC as a no-claim bonus every three years.</p></div></div></section>';
+    '</div><div class="ruled"><h3>How the cover flows</h3><p class="flow">Your company pays the premium to a South African insurer, which keeps a ' + esc(pct(FRONTING)) + ' fronting fee and reinsures the risk into your cell in Mauritius, in US dollars. The cell is administered by Guardrisk and owned through a Mauritian company (GBC) held by your offshore trust. Claims are paid from the cell. What is not needed for claims is paid to the GBC as a no-claim bonus every three years and stays invested there, on the same US dollar return and rand path, for your benefit.</p></div></div></section>';
 
   var risks = '<section class="block" aria-labelledby="s-risks"><div class="block-head"><div><h2 id="s-risks">2. Risks to cover</h2><p class="caption">Pick from the list. Your final schedule of cover is agreed with the fronting insurer and Guardrisk after a risk review.</p></div></div>' +
     '<div class="split-add"><label class="field"><span>Add a risk</span><select id="risk-add"' + (m.available.length ? "" : " disabled") + '><option value="" disabled selected>' + esc(riskPlaceholder) + '</option>' + riskOpts + '</select></label>' +
@@ -1054,7 +1055,7 @@ function view(m) {
       year: r.y,
       cells: [
         cell("Year " + r.y), cell(r.fx.toFixed(2)), cell(R(r.gross)), cell(R(r.fronting)), cell(R(r.taxSave)), cell(R(r.afterTax)),
-        cell(R(r.structZ + r.capZ)), cell(r.ncbZ > 0 ? R(r.ncbZ) : "–", r.ncbZ > 0), cell(R(r.cumNcbZ)), cell(R(r.cashZ)), cell(R(r.total))
+        cell(R(r.structZ + r.capZ)), cell(r.ncbZ > 0 ? R(r.ncbZ) : "–", r.ncbZ > 0), cell(R(r.cumNcbZ)), cell(R(r.fundZ), r.fundZ > 0), cell(R(r.cashZ)), cell(R(r.total))
       ]
     };
   });
@@ -1063,7 +1064,7 @@ function view(m) {
     cells: [
       cell("10-year total"), cell(""), cell(R(sumKey(m.rows, "gross"))), cell(R(sumKey(m.rows, "fronting"))), cell(R(sumKey(m.rows, "taxSave"))),
       cell(R(sumKey(m.rows, "afterTax"))), cell(R(sumKey(m.rows, "structZ") + sumKey(m.rows, "capZ"))), cell(R(m.totNcbZ)), cell(R(m.totNcbZ)),
-      cell(R(m.y10.cashZ)), cell(R(m.y10.total))
+      cell(R(m.y10.fundZ), m.y10.fundZ > 0), cell(R(m.y10.cashZ)), cell(R(m.y10.total))
     ]
   });
   var usd = m.rows.map(function (r) {
@@ -1084,15 +1085,15 @@ function view(m) {
     ]
   });
 
-  var plan = '<section class="block" aria-labelledby="s-plan"><div class="block-head"><div><h2 id="s-plan">7. Your 10-year plan</h2><p class="caption">Policy years from inception. Rand values at each year\'s exchange rate.' + esc(shareNote) + '</p></div></div>' +
+  var plan = '<section class="block" aria-labelledby="s-plan"><div class="block-head"><div><h2 id="s-plan">7. Your 10-year plan</h2><p class="caption">Policy years from inception. Rand values at each year\'s exchange rate. No-claim bonuses are paid to your offshore trust and GBC and stay invested there on the same US dollar return and rand path, for your benefit. Total value is the cell plus that bonus fund.' + esc(shareNote) + '</p></div></div>' +
     '<div class="cols-2"><div><h3>Value built vs your after-tax cost (R millions)</h3>' + lineChart(m) + '</div><div><h3>No-claim bonus payouts (R millions)</h3>' + colChart(m) + '</div></div>' +
     '<div class="segment" role="radiogroup" aria-label="Currency view">' +
     '<label><input type="radio" name="plan-view" id="view-zar" value="zar"' + (state.view === "zar" ? " checked" : "") + '><span>Your position (R)</span></label>' +
     '<label><input type="radio" name="plan-view" id="view-usd" value="usd"' + (state.view === "usd" ? " checked" : "") + '><span>Cell account (US$)</span></label></div>' +
     (state.view === "zar"
-      ? sheet("Your position in rand", ["Year", "R per US$", "Premium paid", "of which fronting", "Tax saving (27%)", "After-tax premium", "Capital + trust/GBC", "No-claim bonus", "Bonuses to date", "Cell value", "Total value"], zar, true)
+      ? sheet("Your position in rand", ["Year", "R per US$", "Premium paid", "of which fronting", "Tax saving (27%)", "After-tax premium", "Capital + trust/GBC", "No-claim bonus", "Bonuses to date", "Bonus fund (offshore, grown)", "Cell value", "Total value"], zar, true)
       : sheet("Cell account in US dollars", ["Year", "Premium reinsured", "FFG fee", "Guardrisk", "Claims", "IBNR reserve", "Underwriting profit", "Investment income", "Mauritius tax", "Profit after tax", "No-claim bonus", "Cell cash at year end"], usd, true)) +
-    '<p class="closing">Cell value is cash held in the cell at year end: your capital (' + esc(U(m.capitalUsd)) + '), the IBNR claims reserve and profits not yet paid out. Every third year the surplus above capital and reserve is paid to your GBC as a no-claim bonus. Trust and GBC running costs are paid outside the cell.</p></section>';
+    '<p class="closing">Cell value is cash held in the cell at year end: your capital (' + esc(U(m.capitalUsd)) + '), the IBNR claims reserve and profits not yet paid out. Every third year the surplus above capital and reserve is paid to the GBC owned by your offshore trust as a no-claim bonus, and it stays invested there on the same US dollar return and rand path, for your benefit. The fund grows at the cell\'s investment return after Mauritius tax. That tax is already in the net growth rate, and the growth is not a cost. Bonuses to date are the amounts paid, at the rand value on the day they were paid. The bonus fund is that money grown and valued at the year\'s exchange rate. Total value is the cell value plus the bonus fund. Trust and GBC running costs are paid outside the cell.</p></section>';
 
   return metrics + structure + risks + assumptions + feeSection(m) + exitSection(m) + tax + plan;
 }
