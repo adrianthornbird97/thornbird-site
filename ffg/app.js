@@ -691,13 +691,13 @@ function dividendCompare(m) {
   var outside = capitalY10 + structCost + referral;
   var orsFromPremium = orsGross - outside;
   var afterTax = preTax * (1 - SA_CIT);
-  var relief = 1 - SA_CIT;
+  var hardCost = divInvested;
   var divCfs = grosses.map(function (g, idx) {
-    var out = g * relief;
+    var out = g * offshoreRate;
     return idx === grosses.length - 1 ? -out + after : -out;
   });
   var orsCfs = grosses.map(function (g, idx) {
-    var out = g * relief;
+    var out = g * offshoreRate;
     return idx === grosses.length - 1 ? -out + orsFromPremium : -out;
   });
   var divIrr = solveIrr(divCfs);
@@ -715,6 +715,7 @@ function dividendCompare(m) {
     orsOffshore1: gross1,
     divOffshore1: gross1 * offshoreRate,
     divInvested: divInvested,
+    hardCost: hardCost,
     preTax: preTax,
     afterTax: afterTax,
     companyTax: companyTax,
@@ -804,14 +805,14 @@ function multipleGap(a, b) {
 
 function taxComparison(m) {
   var c = dividendCompare(m);
-  var divMultiple = c.afterTax > 0 ? c.after / c.afterTax : null;
-  var orsMultiple = c.afterTax > 0 ? c.orsFromPremium / c.afterTax : null;
+  var divMultiple = c.hardCost > 0 ? c.after / c.hardCost : null;
+  var orsMultiple = c.hardCost > 0 ? c.orsFromPremium / c.hardCost : null;
   var headers = ["Route", "Pre-tax amount", "After corporate tax", "After CT and dividends tax", "Net investment cost", "After CT, DT and CGT", "Net offshore value", "Value / cost", "IRR"];
-  var divRow = routeCells("Dividend route", [c.preTax, c.afterTax, c.divInvested, c.afterTax, c.after, c.after]);
-  divRow.cells.push(cell(multipleText(c.after, c.afterTax)));
+  var divRow = routeCells("Route 2: Offshore diversification (dividend route)", [c.preTax, c.afterTax, c.divInvested, c.hardCost, c.after, c.after]);
+  divRow.cells.push(cell(multipleText(c.after, c.hardCost)));
   divRow.cells.push(cell(irrText(c.divIrr)));
-  var orsRow = routeCells("ORS cell", [c.preTax, c.afterTax, c.preTax, c.afterTax, c.orsGross, c.orsFromPremium]);
-  orsRow.cells.push(cell(multipleText(c.orsFromPremium, c.afterTax), c.orsFromPremium > c.afterTax));
+  var orsRow = routeCells("Route 1: Offshore cell captive", [c.preTax, c.afterTax, c.preTax, c.hardCost, c.orsGross, c.orsFromPremium]);
+  orsRow.cells.push(cell(multipleText(c.orsFromPremium, c.hardCost), c.orsFromPremium > c.hardCost));
   orsRow.cells.push(cell(irrText(c.orsIrr)));
   var advRow = routeCells("Advantage", [0, 0, c.preTax - c.divInvested, 0, c.orsGross - c.after, c.advantage], { total: true, pos: true });
   advRow.cells.push(cell(multipleGap(orsMultiple, divMultiple), orsMultiple > divMultiple));
@@ -822,14 +823,14 @@ function taxComparison(m) {
     c: c,
     ahead: ahead,
     html: '<div class="tax-compare" id="tax-compare"><h3 class="subhead">Ten-year totals</h3>' +
-      '<p class="caption" id="tax-compare-note">The alternative assumes you take the same amount out of your company as a dividend and invest it offshore personally within your offshore allowance. That route pays company tax, dividends tax and, on sale, capital gains tax on the growth. Net after-tax investment cost is the pre-tax amount less the 27% corporate tax relief. It is the same for both routes, because both start from the same pre-tax cash and it is the shareholder\'s real economic sacrifice. For a fair comparison, your own capital and the trust/GBC costs paid outside the cell are deducted from the ORS value. Both IRRs use the same timing: that net investment cost goes out at the end of each year, and the net offshore value comes in at the end of year 10.</p>' +
+      '<p class="caption" id="tax-compare-note">The goal is risk management and risk diversification. Route 1 is the offshore cell captive. Route 2 is offshore diversification through a dividend, and that investment is subject to capital gains tax. Net investment cost is the net Route 2 investment, the amount after corporate tax and dividends tax that is actually invested offshore. It is the hard cost used for both routes. For a fair comparison, your own capital and the trust/GBC costs paid outside the cell are deducted from the cell\'s value. Both IRRs use the same timing: that net Route 2 investment goes out at the end of each year, and the net offshore value comes in at the end of year 10.</p>' +
       '<div class="cols-3">' +
       field("div-tax", "Dividends tax (%)", state.divTaxS) +
       field("marginal", "Your marginal income tax rate (%)", state.marginalS) +
       '<div class="field"><span>Capital gains tax</span><p class="cgt-note">Inclusion rate ' + esc(pct(CGT_INCLUSION)) + ', fixed. Effective rate ' + esc(pct(c.cgtRate)) + ' (' + esc(pct(CGT_INCLUSION)) + ' × your ' + esc(pct(c.marginal)) + ' marginal rate).</p></div>' +
       '</div>' +
       '<div id="irr-table">' +
-      sheet("Ten-year comparison of the dividend route and the ORS cell", headers, [divRow, orsRow, advRow], "irr") +
+      sheet("Ten-year comparison of the offshore cell captive and the dividend route", headers, [orsRow, divRow, advRow], "irr") +
       '</div>' +
       '<p class="closing">Cash columns are the 10-year totals. Value columns are the position at the end of year 10. For the dividend route, the value after CT, DT and CGT is the year-10 offshore value, and it is the same as the net offshore value. For the cell, that column is the value after Mauritius tax, and no separate capital gains tax is deducted. The cell\'s net offshore value then deducts your capital at the year-10 rate, the trust and GBC costs and the R30,000 CFO Centre referral. Bonuses flow to your offshore trust and its GBC.</p></div>'
   };

@@ -132,6 +132,12 @@ p { margin: 0; }
   font-size: 1.05rem;
 }
 
+.preamble {
+  max-width: 72ch;
+  margin: 22px 0 0;
+  color: var(--ink);
+}
+
 .consult-lede { margin-top: 10px; }
 
 /* Letterhead */
@@ -853,7 +859,7 @@ table.exit-fit th.num { white-space: normal; }
     grid-auto-flow: column;
     column-gap: 18px;
   }
-  tr, .callout, .risk-points li, .compare-card { break-inside: avoid; }
+  tr, .callout, .risk-points li, .compare-card, .preamble { break-inside: avoid; }
   .tax-compare .compare,
   .tax-compare .cols-2 { grid-template-columns: 1fr 1fr; }
   .tax-compare .cols-3 { grid-template-columns: 1fr 1fr 1fr; }
