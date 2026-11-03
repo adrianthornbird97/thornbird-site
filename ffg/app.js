@@ -15,13 +15,14 @@ var MU_TAX = 0.03;
 var IBNR = 0.07;
 var NCB_CYCLE = 3;
 var SA_CIT = 0.27;
+var CGT_INCLUSION = 0.40;
 var MAX_POLICIES = 10;
 var COSTS = {
   one: { setup: 4500 + 12000, annual: 2000 + 8000, sharedSetup: 0, sharedAnnual: 0 },
   many: { setup: 3000, annual: 1500, sharedSetup: 12000, sharedAnnual: 8000 }
 };
 var CFO_REFERRAL_ZAR = 30000;
-var DEFAULTS = { premium: "5,000,000", fx: "16.60", dep: "3", inv: "4", claims: "0", esc: "5", taxable: "20,000,000", policies: "10" };
+var DEFAULTS = { premium: "5,000,000", fx: "16.60", dep: "3", inv: "4", claims: "0", esc: "5", taxable: "20,000,000", policies: "10", divTax: "20", marginal: "45" };
 var FX_PRESETS = [
   { value: "base", label: "Base: rand weakens 3% pa", dep: "3" },
   { value: "strong", label: "Rand strengthens 2% pa", dep: "-2" },
@@ -130,6 +131,8 @@ var state = {
   claimsS: DEFAULTS.claims,
   escS: DEFAULTS.esc,
   taxableS: DEFAULTS.taxable,
+  divTaxS: DEFAULTS.divTax,
+  marginalS: DEFAULTS.marginal,
   monthsS: "12",
   ownFx: false,
   view: "zar",
@@ -641,6 +644,123 @@ function clientRisks(m) {
     list + '</div>';
 }
 
+function clampRate(s, d) {
+  var v = num(s, d) / 100;
+  if (v < 0) return 0;
+  if (v > 1) return 1;
+  return v;
+}
+
+function dividendCompare(m) {
+  var divTax = clampRate(state.divTaxS, 20);
+  var marginal = clampRate(state.marginalS, 45);
+  var cgtRate = CGT_INCLUSION * marginal;
+  var offshoreRate = (1 - SA_CIT) * (1 - divTax);
+  var divOnGross = (1 - SA_CIT) * divTax;
+  var gross1 = m.y1.gross;
+  var usd = 0;
+  var divInvested = 0;
+  var orsInvested = 0;
+  var i;
+  for (i = 0; i < m.rows.length; i++) {
+    var r = m.rows[i];
+    usd = usd * (1 + m.inv);
+    var put = r.gross * offshoreRate;
+    divInvested += put;
+    orsInvested += r.gross;
+    usd += put / r.fx;
+  }
+  var before = usd * m.y10.fx;
+  var gain = before - divInvested;
+  var cgt = Math.max(0, gain) * cgtRate;
+  var after = before - cgt;
+  var orsValue = m.y10.total + claimsPaidZ(m.rows);
+  return {
+    divTax: divTax,
+    marginal: marginal,
+    cgtRate: cgtRate,
+    offshoreRate: offshoreRate,
+    divOnGross: divOnGross,
+    combined: 1 - offshoreRate,
+    orsTax: gross1 * SA_CIT,
+    divTaxAmount: gross1 * divOnGross,
+    year1Saving: gross1 * (1 - offshoreRate),
+    orsOffshore1: gross1,
+    divOffshore1: gross1 * offshoreRate,
+    divInvested: divInvested,
+    orsInvested: orsInvested,
+    before: before,
+    cgt: cgt,
+    after: after,
+    orsValue: orsValue,
+    advantage: orsValue - after
+  };
+}
+
+function compareCard(title, lines) {
+  return '<div class="compare-card"><h3>' + esc(title) + '</h3><dl class="props">' + lines.map(function (it) {
+    return '<div><dt>' + esc(it[0]) + '</dt><dd' + (it[2] ? ' class="pos"' : '') + '>' + esc(it[1]) + '</dd></div>';
+  }).join("") + '</dl></div>';
+}
+
+function compareBars(c) {
+  var max = Math.max(c.after, c.orsValue, 1);
+  function row(label, value, color) {
+    var w = Math.max(0, value) / max * 100;
+    return '<div class="bar-row"><span class="bar-label">' + esc(label) + '</span><span class="bar-track"><span class="bar-fill" style="width:' + w.toFixed(1) + '%;background:' + color + '"></span></span><span class="bar-val">' + esc(Rm(value)) + '</span></div>';
+  }
+  var label = "Year-10 value after tax. Dividend route " + Rm(c.after) + ". ORS cell " + Rm(c.orsValue) + ".";
+  return '<div class="bars" role="img" aria-label="' + esc(label) + '">' +
+    row("Dividend route, after CGT", c.after, "#8C6239") +
+    row("ORS cell", c.orsValue, "#1B2A4A") +
+    '</div>';
+}
+
+function taxComparison(m) {
+  var c = dividendCompare(m);
+  var yearRows = [
+    { cells: [cell("Amount invested, 10 years"), cell(R(c.divInvested)), cell(R(c.orsInvested))] },
+    { cells: [cell("Value at year 10, before CGT"), cell(R(c.before)), cell(R(c.orsValue))] },
+    { cells: [cell("CGT on sale"), cell(R(c.cgt)), cell("–")] },
+    { cells: [cell("Value at year 10, after tax"), cell(R(c.after)), cell(R(c.orsValue), true)] },
+    { total: true, cells: [cell("ORS advantage"), cell(""), cell(R(c.advantage), c.advantage > 0)] }
+  ];
+  var ahead = c.advantage >= 0
+    ? Rm(c.advantage) + " more than the dividend route after CGT"
+    : Rm(Math.abs(c.advantage)) + " less than the dividend route after CGT";
+  return {
+    c: c,
+    ahead: ahead,
+    html: '<div class="tax-compare" id="tax-compare"><h3 class="subhead">Compared with taking a dividend</h3>' +
+      '<p class="caption">The alternative assumes you take the same amount out of your company as a dividend and invest it offshore personally within your offshore allowance. That route pays company tax, dividends tax and, on sale, capital gains tax on the growth.</p>' +
+      '<div class="cols-3">' +
+      field("div-tax", "Dividends tax (%)", state.divTaxS) +
+      field("marginal", "Your marginal income tax rate (%)", state.marginalS) +
+      '<div class="field"><span>Capital gains tax</span><p class="cgt-note">Inclusion rate ' + esc(pct(CGT_INCLUSION)) + ', fixed. Effective rate ' + esc(pct(c.cgtRate)) + ' (' + esc(pct(CGT_INCLUSION)) + ' × your ' + esc(pct(c.marginal)) + ' marginal rate).</p></div>' +
+      '</div>' +
+      '<h3 class="subhead">Year 1, on the premium of ' + esc(R(c.orsOffshore1)) + '</h3>' +
+      '<div class="compare">' +
+      compareCard("Through the ORS cell", [
+        ["Company tax saved", R(c.orsTax) + " (" + pct(SA_CIT) + " of the premium)", true],
+        ["Dividends tax", "None. The premium is not paid out as a dividend."],
+        ["Invested offshore", R(c.orsOffshore1) + " (the full premium)"]
+      ]) +
+      compareCard("Dividend route", [
+        ["Company tax", R(c.orsTax) + " (" + pct(SA_CIT) + ")"],
+        ["Dividends tax", R(c.divTaxAmount) + " (" + pct(c.divTax) + " of the " + pct(1 - SA_CIT) + " left, " + pct(c.divOnGross) + " of the premium)"],
+        ["Combined tax", R(c.year1Saving) + " (" + pct(c.combined) + ")"],
+        ["Invested offshore", R(c.divOffshore1) + " (" + pct(c.offshoreRate) + " of the premium)"]
+      ]) +
+      '</div>' +
+      callout("good", "Tax saving versus the dividend route: " + R(c.year1Saving) + ".", "Company tax of " + R(c.orsTax) + " and dividends tax of " + R(c.divTaxAmount) + " avoided. " + R(c.orsOffshore1) + " goes into the cell, against " + R(c.divOffshore1) + " reaching you offshore as a dividend.") +
+      '<h3 class="subhead">Ten years, in rand at year 10</h3>' +
+      '<div class="cols-2"><div>' +
+      sheet("ORS cell against a dividend invested offshore", ["Item", "Dividend route", "ORS cell"], yearRows, false) +
+      '</div><div><h3>Value after tax</h3>' + compareBars(c) +
+      '<p class="closing">Bonuses flow to your offshore trust and its GBC. The ORS value is the total value built plus claims paid to your company.</p></div></div></div>'
+  };
+}
+
 function exitSection(m) {
   return '<section class="block" id="exit-value" aria-labelledby="s-exit"><div class="block-head"><div><h2 id="s-exit">5. Exit value: what could change it</h2><p class="caption">The cell is held in US dollars, so a stronger rand lowers the rand value at exit. Returns depend on where the cell\'s cash is invested. Claims reduce the bonus roughly rand for rand. Claims are paid out of your cell to your company, so higher claims lower the bonus but are returned to you as cover. None of these figures are guaranteed. Your capital and the claims reserve stay in the cell. Net value is the total value built plus claims paid to your company, minus the cumulative after-tax cost. In each table, only that one assumption changes, and the highlighted row is your current input or the nearest step shown.</p></div></div>' +
     '<h3>Claims ratio</h3>' + claimsTable(m) +
@@ -650,6 +770,7 @@ function exitSection(m) {
 }
 
 function view(m) {
+  var cmp = taxComparison(m);
   var shareNote = state.structure === "many" ? " Your share of a " + m.n + "-policy cell (1/" + m.n + ")." : "";
   var fxOptions = FX_PRESETS.map(function (p) {
     return '<option value="' + p.value + '"' + (p.value === m.fxPreset ? " selected" : "") + '>' + esc(p.label) + '</option>';
@@ -679,7 +800,7 @@ function view(m) {
   var metrics = '<ul class="metrics">' +
     '<li><p class="metric-value" data-metric="value">' + esc(Rm(m.y10.total)) + '</p><p class="metric-label">Value built after 10 years</p><p class="metric-detail">Cell value ' + esc(Rm(m.y10.cashZ)) + ' + no-claim bonuses ' + esc(Rm(m.totNcbZ)) + '</p></li>' +
     '<li><p class="metric-value pos" data-metric="ncb">' + esc(Rm(m.totNcbZ)) + '</p><p class="metric-label">No-claim bonuses paid, 10 years</p><p class="metric-detail" data-metric="ncb-detail">' + esc(U(m.totNcbU) + " in years 3, 6 and 9") + '</p></li>' +
-    '<li><p class="metric-value pos" data-metric="tax">' + esc(R(m.taxSaving)) + '</p><p class="metric-label">Tax saving, year to 28 Feb 2027</p><p class="metric-detail">At ' + esc(pct(SA_CIT)) + ' on ' + esc(R(m.deduction)) + ' premium</p></li>' +
+    '<li><p class="metric-value pos" data-metric="tax">' + esc(R(cmp.c.year1Saving)) + '</p><p class="metric-label">Tax saving versus a dividend, year 1</p><p class="metric-detail">Company tax ' + esc(R(cmp.c.orsTax)) + ' and dividends tax ' + esc(R(cmp.c.divTaxAmount)) + ' avoided. After 10 years, ' + esc(cmp.ahead) + '.</p></li>' +
     '<li><p class="metric-value" data-metric="capital">' + esc(R(m.capitalZar)) + '</p><p class="metric-label">Your capital into the cell</p><p class="metric-detail">' + esc(pct(m.st.capitalPct) + " of year-1 premium (" + U(m.capitalUsd) + "), funded via your trust") + '</p></li>' +
     '</ul>';
 
@@ -751,7 +872,7 @@ function view(m) {
   if (m.taxableAfter < 0 && m.taxable > 0) {
     tax += callout("warn", "Premium exceeds taxable income.", "Only " + R(m.taxable) + " of the premium reduces tax this year; the balance of " + R(-m.taxableAfter) + " becomes an assessed loss carried forward.");
   }
-  tax += '</section>';
+  tax += cmp.html + '</section>';
 
   var zar = m.rows.map(function (r) {
     return {
@@ -860,6 +981,8 @@ function resetCase() {
   state.claimsS = DEFAULTS.claims;
   state.escS = DEFAULTS.esc;
   state.taxableS = DEFAULTS.taxable;
+  state.divTaxS = DEFAULTS.divTax;
+  state.marginalS = DEFAULTS.marginal;
   state.monthsS = "12";
   state.ownFx = false;
 }
@@ -874,6 +997,8 @@ function updateFrom(t) {
     case "inv": state.invS = t.value; return true;
     case "claims": state.claimsS = t.value; return true;
     case "taxable": state.taxableS = t.value; return true;
+    case "div-tax": state.divTaxS = t.value; return true;
+    case "marginal": state.marginalS = t.value; return true;
     case "months": state.monthsS = t.value; return true;
     case "own-fx": state.ownFx = t.checked; return true;
     case "fx-preset": {
