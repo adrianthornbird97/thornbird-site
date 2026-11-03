@@ -199,7 +199,7 @@ function props(items) {
   }).join("") + '</dl>';
 }
 
-function cell(text, pos) { return { text: String(text), pos: !!pos }; }
+function cell(text, pos, title) { return { text: String(text), pos: !!pos, title: title || "" }; }
 
 function sheet(caption, headers, bodyRows, wide) {
   var head = headers.map(function (h, i) {
@@ -208,7 +208,8 @@ function sheet(caption, headers, bodyRows, wide) {
   var body = bodyRows.map(function (row) {
     var cells = row.cells.map(function (c, i) {
       var cls = ((i ? "num" : "") + (c.pos ? " pos" : "")).trim();
-      return '<td' + (cls ? ' class="' + cls + '"' : '') + (i === 0 ? ' scope="row"' : '') + '>' + esc(c.text) + '</td>';
+      var title = c.title ? ' title="' + esc(c.title) + '"' : "";
+      return '<td' + (cls ? ' class="' + cls + '"' : '') + title + (i === 0 ? ' scope="row"' : '') + '>' + esc(c.text) + '</td>';
     }).join("");
     var cls = [];
     if (row.total) cls.push("total");
@@ -803,18 +804,34 @@ function multipleGap(a, b) {
   return (d > 0 ? "+" : "") + d.toFixed(2) + "x";
 }
 
+function structureSplit(c) {
+  var afterAll = Math.round(c.orsGross);
+  var net = Math.round(c.orsFromPremium);
+  var total = afterAll - net;
+  var cap = Math.round(c.capitalY10);
+  var trust = Math.round(c.structCost);
+  var ref = Math.round(c.referral);
+  trust += total - (cap + trust + ref);
+  return { cap: cap, trust: trust, ref: ref, total: total, afterAll: afterAll, net: net };
+}
+
 function taxComparison(m) {
   var c = dividendCompare(m);
+  var s = structureSplit(c);
+  var divAfter = Math.round(c.after);
   var divMultiple = c.hardCost > 0 ? c.after / c.hardCost : null;
   var orsMultiple = c.hardCost > 0 ? c.orsFromPremium / c.hardCost : null;
-  var headers = ["Route", "Pre-tax amount", "After corporate tax", "After CT and dividends tax", "Net investment cost", "After CT, DT and CGT", "Net offshore value", "Value / cost", "IRR"];
-  var divRow = routeCells("Route 2: Offshore diversification (dividend route)", [c.preTax, c.afterTax, c.divInvested, c.hardCost, c.after, c.after]);
+  var breakdown = "Capital at the year-10 rate " + R(s.cap) + ", trust and GBC setup and running costs " + R(s.trust) + ", CFO Centre referral " + R(s.ref) + ".";
+  var headers = ["Route", "Pre-tax amount", "After corporate tax", "After CT and dividends tax", "Net investment cost", "After CT, DT and CGT", "Less: structure costs", "Net offshore value", "Value / cost", "IRR"];
+  var divRow = routeCells("Route 2: Offshore diversification (dividend route)", [c.preTax, c.afterTax, c.divInvested, c.hardCost, divAfter, 0, divAfter]);
   divRow.cells.push(cell(multipleText(c.after, c.hardCost)));
   divRow.cells.push(cell(irrText(c.divIrr)));
-  var orsRow = routeCells("Route 1: Offshore cell captive", [c.preTax, c.afterTax, c.preTax, c.hardCost, c.orsGross, c.orsFromPremium]);
+  var orsRow = routeCells("Route 1: Offshore cell captive", [c.preTax, c.afterTax, c.preTax, c.hardCost, s.afterAll]);
+  orsRow.cells.push(cell(R(-s.total), false, breakdown));
+  orsRow.cells.push(cell(R(s.net), s.net > 0));
   orsRow.cells.push(cell(multipleText(c.orsFromPremium, c.hardCost), c.orsFromPremium > c.hardCost));
   orsRow.cells.push(cell(irrText(c.orsIrr)));
-  var advRow = routeCells("Advantage", [0, 0, c.preTax - c.divInvested, 0, c.orsGross - c.after, c.advantage], { total: true, pos: true });
+  var advRow = routeCells("Advantage", [0, 0, c.preTax - c.divInvested, 0, s.afterAll - divAfter, -s.total, s.net - divAfter], { total: true, pos: true });
   advRow.cells.push(cell(multipleGap(orsMultiple, divMultiple), orsMultiple > divMultiple));
   advRow.cells.push(cell(ptsText(c.irrAdvantage), c.irrAdvantage > 0));
   var ahead = moneyM(c.advantage) + (c.advantage >= 0 ? " more than the dividend route" : " versus the dividend route");
@@ -832,7 +849,7 @@ function taxComparison(m) {
       '<div id="irr-table">' +
       sheet("Ten-year comparison of the offshore cell captive and the dividend route", headers, [orsRow, divRow, advRow], "irr") +
       '</div>' +
-      '<p class="closing">Cash columns are the 10-year totals. Value columns are the position at the end of year 10. For the dividend route, the value after CT, DT and CGT is the year-10 offshore value, and it is the same as the net offshore value. For the cell, that column is the value after Mauritius tax, and no separate capital gains tax is deducted. The cell\'s net offshore value then deducts your capital at the year-10 rate, the trust and GBC costs and the R30,000 CFO Centre referral. Bonuses flow to your offshore trust and its GBC.</p></div>'
+      '<p class="closing" id="structure-costs-note">Cash columns are the 10-year totals. Value columns are the position at the end of year 10. For Route 2, the value after CT, DT and CGT is the year-10 offshore value, and it is the same as the net offshore value. For Route 1, that column is the value after Mauritius tax, and no separate capital gains tax is deducted. Less: structure costs is ' + esc(breakdown) + ' Route 2 has none. After CT, DT and CGT less structure costs equals the net offshore value. Bonuses flow to your offshore trust and its GBC.</p></div>'
   };
 }
 

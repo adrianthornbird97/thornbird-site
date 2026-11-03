@@ -849,8 +849,8 @@ table.exit-fit th.num { white-space: normal; }
   table.irr th,
   table.irr td {
     white-space: normal;
-    padding: 2px 3px;
-    font-size: 7.5px;
+    padding: 2px 2px;
+    font-size: 7px;
     letter-spacing: 0;
   }
   .risk-points {
