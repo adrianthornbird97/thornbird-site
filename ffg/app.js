@@ -213,9 +213,10 @@ function sheet(caption, headers, bodyRows, wide) {
     if (row.memo) cls.push("memo");
     return '<tr' + (cls.length ? ' class="' + cls.join(" ") + '"' : '') + (row.year ? ' data-year="' + row.year + '"' : '') + '>' + cells + '</tr>';
   }).join("");
-  var kind = wide === true ? "wide" : wide === "compact" ? "compact" : "mid";
+  var kind = wide === true ? "wide" : (wide === "compact" || wide === "exit") ? "compact" : "mid";
   var hint = kind === "mid" ? " until-mid" : "";
-  return '<div class="sheet-wrap"><p class="scroll-hint' + hint + '">Scroll sideways for every column.</p><div class="sheet"><table class="' + kind + '"><caption class="vh">' + esc(caption) + '</caption><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table></div></div>';
+  var extra = wide === "exit" ? " exit-fit" : "";
+  return '<div class="sheet-wrap"><p class="scroll-hint' + hint + '">Scroll sideways for every column.</p><div class="sheet"><table class="' + kind + extra + '"><caption class="vh">' + esc(caption) + '</caption><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table></div></div>';
 }
 
 function chartBox() {
@@ -545,9 +546,14 @@ function markLabel(label, hi, exact, base) {
   return tags.length ? label + " (" + tags.join(", ") + ")" : label;
 }
 
+function claimsPaidZ(rows) {
+  return rows.reduce(function (sum, r) { return sum + r.claims * r.fx; }, 0);
+}
+
 function exitCells(label, rows, hi) {
   var y10 = rows[9];
-  var net = y10.total - y10.cumOutlay;
+  var claimsZ = claimsPaidZ(rows);
+  var net = y10.total + claimsZ - y10.cumOutlay;
   return {
     hi: hi,
     cells: [
@@ -559,6 +565,7 @@ function exitCells(label, rows, hi) {
       cell(R(y10.cashZ)),
       cell(R(y10.total)),
       cell(R(y10.cumOutlay)),
+      cell(R(claimsZ), claimsZ > 0),
       cell(R(net), net > 0)
     ]
   };
@@ -574,7 +581,7 @@ function fxExitSteps() {
   });
 }
 
-var EXIT_HEADERS = ["Assumption", "Year 3 bonus", "Year 6 bonus", "Year 9 bonus", "Bonuses, 10 years", "Cell value, year 10", "Total value built", "Cumulative cost", "Net value"];
+var EXIT_HEADERS = ["Assumption", "Year 3 bonus", "Year 6 bonus", "Year 9 bonus", "Bonuses, 10 years", "Cell value, year 10", "Total value built", "Cumulative cost", "Claims paid to you", "Net value, incl. claims"];
 
 function claimsTable(m) {
   var steps = [0, 10, 20, 30, 40, 50];
@@ -584,7 +591,7 @@ function claimsTable(m) {
     var label = markLabel(step + "%", hi, Math.abs(m.claimsPct - step) < 1e-9, false);
     return exitCells(label, modelWith(m, { lr: step / 100 }), hi);
   });
-  return sheet("No-claim bonus and exit value at different claims ratios", EXIT_HEADERS, rows, "compact");
+  return sheet("No-claim bonus and exit value at different claims ratios", EXIT_HEADERS, rows, "exit");
 }
 
 function fxTable(m) {
@@ -595,7 +602,7 @@ function fxTable(m) {
     var label = markLabel(step.label, hi, Math.abs(m.depPct - step.dep) < 1e-9, false);
     return exitCells(label, modelWith(m, { dep: step.dep / 100 }), hi);
   });
-  return sheet("No-claim bonus and exit value at different rand paths", EXIT_HEADERS, rows, "compact");
+  return sheet("No-claim bonus and exit value at different rand paths", EXIT_HEADERS, rows, "exit");
 }
 
 function invTable(m) {
@@ -606,7 +613,7 @@ function invTable(m) {
     var label = markLabel(step + "%", hi, Math.abs(m.invPct - step) < 1e-9, step === 4);
     return exitCells(label, modelWith(m, { inv: step / 100 }), hi);
   });
-  return sheet("No-claim bonus and exit value at different investment returns", EXIT_HEADERS, rows, "compact");
+  return sheet("No-claim bonus and exit value at different investment returns", EXIT_HEADERS, rows, "exit");
 }
 
 function clientRisks(m) {
@@ -635,7 +642,7 @@ function clientRisks(m) {
 }
 
 function exitSection(m) {
-  return '<section class="block" id="exit-value" aria-labelledby="s-exit"><div class="block-head"><div><h2 id="s-exit">5. Exit value: what could change it</h2><p class="caption">The cell is held in US dollars, so a stronger rand lowers the rand value at exit. Returns depend on where the cell\'s cash is invested. Claims reduce the bonus roughly rand for rand. None of these figures are guaranteed. Your capital and the claims reserve stay in the cell. Net value is the total value built minus the cumulative after-tax cost. In each table, only that one assumption changes, and the highlighted row is your current input or the nearest step shown.</p></div></div>' +
+  return '<section class="block" id="exit-value" aria-labelledby="s-exit"><div class="block-head"><div><h2 id="s-exit">5. Exit value: what could change it</h2><p class="caption">The cell is held in US dollars, so a stronger rand lowers the rand value at exit. Returns depend on where the cell\'s cash is invested. Claims reduce the bonus roughly rand for rand. Claims are paid out of your cell to your company, so higher claims lower the bonus but are returned to you as cover. None of these figures are guaranteed. Your capital and the claims reserve stay in the cell. Net value is the total value built plus claims paid to your company, minus the cumulative after-tax cost. In each table, only that one assumption changes, and the highlighted row is your current input or the nearest step shown.</p></div></div>' +
     '<h3>Claims ratio</h3>' + claimsTable(m) +
     '<h3 class="subhead">Exchange rate</h3>' + fxTable(m) +
     '<h3 class="subhead">Investment return</h3>' + invTable(m) +
