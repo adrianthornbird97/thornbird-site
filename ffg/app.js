@@ -20,6 +20,7 @@ var COSTS = {
   one: { setup: 4500 + 12000, annual: 2000 + 8000, sharedSetup: 0, sharedAnnual: 0 },
   many: { setup: 3000, annual: 1500, sharedSetup: 12000, sharedAnnual: 8000 }
 };
+var CFO_REFERRAL_ZAR = 30000;
 var DEFAULTS = { premium: "5,000,000", fx: "16.60", dep: "3", inv: "4", claims: "0", esc: "5", taxable: "20,000,000", policies: "10" };
 var FX_PRESETS = [
   { value: "base", label: "Base: rand weakens 3% pa", dep: "3" },
@@ -105,7 +106,7 @@ function runModel(o) {
     var grossMine = gz * share;
     var taxSave = grossMine * SA_CIT;
     var capZ = ci * fx * share;
-    cumOutlay += grossMine - taxSave + structUsd * fx + capZ;
+    cumOutlay += grossMine - taxSave + structUsd * fx + capZ + (y === 1 ? CFO_REFERRAL_ZAR : 0);
     rows.push({
       y: y, fx: fx, gross: grossMine, fronting: (gz - pz) * share, risk: pz * share, pu: pu * share,
       ffg: ffg * share, gr: gr * share, claims: cl * share, ibnr: ic * share, uw: uw * share,
@@ -171,7 +172,12 @@ function compute() {
     taxSaving: taxBefore - taxAfter,
     netCost: deduction - (taxBefore - taxAfter),
     fxPreset: preset ? preset.value : "custom",
-    pickedRisks: pickedRisks, available: available
+    pickedRisks: pickedRisks, available: available,
+    dep: dep, inv: inv, lr: lr, esc: escalation,
+    claimsPct: Math.max(0, num(state.claimsS, 0)),
+    depPct: num(state.depS, 3),
+    invPct: num(state.invS, 4),
+    escPct: num(state.escS, 5)
   };
 }
 
@@ -200,9 +206,16 @@ function sheet(caption, headers, bodyRows, wide) {
       var cls = ((i ? "num" : "") + (c.pos ? " pos" : "")).trim();
       return '<td' + (cls ? ' class="' + cls + '"' : '') + (i === 0 ? ' scope="row"' : '') + '>' + esc(c.text) + '</td>';
     }).join("");
-    return '<tr' + (row.total ? ' class="total"' : '') + (row.year ? ' data-year="' + row.year + '"' : '') + '>' + cells + '</tr>';
+    var cls = [];
+    if (row.total) cls.push("total");
+    if (row.sub) cls.push("sub");
+    if (row.hi) cls.push("hi");
+    if (row.memo) cls.push("memo");
+    return '<tr' + (cls.length ? ' class="' + cls.join(" ") + '"' : '') + (row.year ? ' data-year="' + row.year + '"' : '') + '>' + cells + '</tr>';
   }).join("");
-  return '<div class="sheet-wrap"><p class="scroll-hint' + (wide ? "" : " until-mid") + '">Scroll sideways for every column.</p><div class="sheet"><table class="' + (wide ? "wide" : "mid") + '"><caption class="vh">' + esc(caption) + '</caption><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table></div></div>';
+  var kind = wide === true ? "wide" : wide === "compact" ? "compact" : "mid";
+  var hint = kind === "mid" ? " until-mid" : "";
+  return '<div class="sheet-wrap"><p class="scroll-hint' + hint + '">Scroll sideways for every column.</p><div class="sheet"><table class="' + kind + '"><caption class="vh">' + esc(caption) + '</caption><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table></div></div>';
 }
 
 function chartBox() {
@@ -232,7 +245,7 @@ function lineChart(m) {
     { name: "Total value (cell + bonuses)", color: "#1B2A4A", width: 2.25, dash: "", values: m.rows.map(function (r) { return r.total / 1e6; }) },
     { name: "No-claim bonuses paid to date", color: "#2F5E80", width: 1.75, dash: "", values: m.rows.map(function (r) { return r.cumNcbZ / 1e6; }) },
     { name: "Cell value", color: "#4F7390", width: 1.75, dash: "", values: m.rows.map(function (r) { return r.cashZ / 1e6; }) },
-    { name: "Cumulative after-tax cost incl. capital and trust/GBC", color: "#8C6239", width: 1.75, dash: "5 4", values: m.rows.map(function (r) { return r.cumOutlay / 1e6; }) }
+    { name: "Cumulative after-tax cost incl. capital, trust/GBC and referral", color: "#8C6239", width: 1.75, dash: "5 4", values: m.rows.map(function (r) { return r.cumOutlay / 1e6; }) }
   ];
   var peak = 0;
   series.forEach(function (sr) { sr.values.forEach(function (v) { if (Number.isFinite(v) && v > peak) peak = v; }); });
@@ -313,6 +326,322 @@ function sumKey(rows, key) {
   return rows.reduce(function (a, r) { return a + r[key]; }, 0);
 }
 
+function pct2(v) {
+  if (!Number.isFinite(v)) return "–";
+  return (v * 100).toFixed(2) + "%";
+}
+
+function nearestValue(current, values) {
+  var best = values[0];
+  var bestD = Math.abs(current - best);
+  var i;
+  for (i = 1; i < values.length; i++) {
+    var d = Math.abs(current - values[i]);
+    if (d < bestD - 1e-9) {
+      best = values[i];
+      bestD = d;
+    }
+  }
+  return best;
+}
+
+function yearPhrase(years) {
+  if (years.length === 1) return "year " + years[0];
+  var parts = [];
+  var start = years[0];
+  var prev = years[0];
+  var i;
+  for (i = 1; i <= years.length; i++) {
+    var y = years[i];
+    if (y === prev + 1) { prev = y; continue; }
+    parts.push(start === prev ? String(start) : start + "–" + prev);
+    start = y;
+    prev = y;
+  }
+  if (parts.length === 1) return "years " + parts[0];
+  var last = parts.pop();
+  return "years " + parts.join(", ") + " and " + last;
+}
+
+function feePack(m) {
+  var c = COSTS[state.structure];
+  var share = 1 / m.n;
+  var setupUsd = c.setup + c.sharedSetup * share;
+  var annualUsd = c.annual + c.sharedAnnual * share;
+  var years = m.rows.map(function (r) {
+    var fronting = Math.round(r.fronting);
+    var ffg = Math.round(r.ffg * r.fx);
+    var gr = Math.round(r.gr * r.fx);
+    var mtax = Math.round(r.mtax * r.fx);
+    var annual = Math.round(annualUsd * r.fx);
+    var ongoing = fronting + ffg + gr + mtax + annual;
+    var setup = r.y === 1 ? Math.round(setupUsd * r.fx) : 0;
+    var referral = r.y === 1 ? CFO_REFERRAL_ZAR : 0;
+    return {
+      y: r.y,
+      fronting: fronting,
+      ffg: ffg,
+      gr: gr,
+      mtax: mtax,
+      annual: annual,
+      ongoing: ongoing,
+      setup: setup,
+      referral: referral,
+      once: setup + referral,
+      total: ongoing + setup + referral,
+      minApplies: r.pu * m.n * GR_PCT < GR_MIN - 1e-6,
+      ibnr: Math.round(r.ibnr * r.fx),
+      gross: Math.round(r.gross)
+    };
+  });
+  function col(key) {
+    return years.reduce(function (a, y) { return a + y[key]; }, 0);
+  }
+  var y1 = years[0];
+  var y10 = years[9];
+  return {
+    years: years,
+    setupUsd: setupUsd,
+    annualUsd: annualUsd,
+    y1: y1,
+    gross1: y1.gross,
+    setup: col("setup"),
+    referral: col("referral"),
+    once: col("once"),
+    fronting: col("fronting"),
+    ffg: col("ffg"),
+    gr: col("gr"),
+    mtax: col("mtax"),
+    annual: col("annual"),
+    ongoing: col("ongoing"),
+    total: col("total"),
+    ibnr: col("ibnr"),
+    pctY1: y1.gross > 0 ? y1.ongoing / y1.gross : 0,
+    pctY10: y10.gross > 0 ? y10.ongoing / y10.gross : 0,
+    minYears: years.filter(function (y) { return y.minApplies; }).map(function (y) { return y.y; }),
+    capZ: Math.round(m.y1.capZ)
+  };
+}
+
+function feeLine(label, y1, total, gross, flags) {
+  return {
+    sub: !!(flags && flags.sub),
+    total: !!(flags && flags.total),
+    memo: !!(flags && flags.memo),
+    cells: [
+      cell(label),
+      cell(R(y1)),
+      cell(gross > 0 ? pct2(y1 / gross) : "–"),
+      cell(R(total))
+    ]
+  };
+}
+
+function guardriskLabel(minYears) {
+  var base = "Guardrisk cell fee (3%, minimum " + U(GR_MIN) + " per cell a year";
+  if (!minYears.length) return base + ")";
+  if (minYears.length === 10) return base + "; minimum applies every year)";
+  return base + "; minimum applies in " + yearPhrase(minYears) + ")";
+}
+
+function ongoingNote(pack) {
+  var x = pct(pack.pctY1);
+  var y = pct(pack.pctY10);
+  var lower = pack.pctY10 < pack.pctY1 - 0.00005;
+  if (lower && pack.minYears.length) {
+    return "Ongoing fees total " + x + " of premium in year 1, falling to " + y + " by year 10 as the Guardrisk minimum is spread over a larger premium.";
+  }
+  if (lower) return "Ongoing fees total " + x + " of premium in year 1, falling to " + y + " by year 10.";
+  if (pack.pctY10 > pack.pctY1 + 0.00005) return "Ongoing fees total " + x + " of premium in year 1 and " + y + " in year 10.";
+  return "Ongoing fees total " + x + " of premium in year 1 and in year 10.";
+}
+
+function feeSection(m) {
+  var f = feePack(m);
+  var g = f.gross1;
+  var headers = ["Item", "Year 1", "% of year-1 premium", "10-year total"];
+  var onceRows = [
+    feeLine("Trust and GBC setup (" + U(f.setupUsd) + ")", f.y1.setup, f.setup, g),
+    feeLine("CFO Centre referral commission", f.referral, f.referral, g),
+    feeLine("Once-off total", f.once, f.once, g, { sub: true })
+  ];
+  var ongoingRows = [
+    feeLine("Fronting fee (2.5% of the gross premium)", f.y1.fronting, f.fronting, g),
+    feeLine("FFG management fee (9.2% of the premium reinsured)", f.y1.ffg, f.ffg, g),
+    feeLine(guardriskLabel(f.minYears), f.y1.gr, f.gr, g),
+    feeLine("Mauritius tax (3% of cell profit)", f.y1.mtax, f.mtax, g),
+    feeLine("Trust and GBC annual running costs (" + U(f.annualUsd) + " a year)", f.y1.annual, f.annual, g),
+    feeLine("Ongoing total", f.y1.ongoing, f.ongoing, g, { sub: true }),
+    feeLine("Total cost, including once-off", f.y1.total, f.total, g, { total: true }),
+    feeLine("IBNR claims reserve (7% of the premium reinsured, not a fee)", f.y1.ibnr, f.ibnr, g, { memo: true })
+  ];
+  var perRows = f.years.map(function (y) {
+    return {
+      year: y.y,
+      cells: [
+        cell("Year " + y.y),
+        cell(R(y.fronting)),
+        cell(R(y.ffg)),
+        cell(R(y.gr) + (y.minApplies ? " †" : "")),
+        cell(R(y.mtax)),
+        cell(R(y.annual)),
+        cell(R(y.ongoing)),
+        cell(y.once ? R(y.once) : "–"),
+        cell(R(y.total))
+      ]
+    };
+  });
+  perRows.push({
+    total: true,
+    cells: [
+      cell("10-year total"),
+      cell(R(f.fronting)),
+      cell(R(f.ffg)),
+      cell(R(f.gr)),
+      cell(R(f.mtax)),
+      cell(R(f.annual)),
+      cell(R(f.ongoing)),
+      cell(R(f.once)),
+      cell(R(f.total))
+    ]
+  });
+  var foot = "Once-off costs are paid in year 1 and then drop off. ";
+  if (f.minYears.length) foot += "† The Guardrisk minimum of " + U(GR_MIN) + " per cell applies in " + (f.minYears.length === 10 ? "every year" : yearPhrase(f.minYears)) + ".";
+  else foot += "The Guardrisk fee is 3% of the premium reinsured in every year. The " + U(GR_MIN) + " minimum is not reached.";
+  return '<section class="block" id="fee-summary" aria-labelledby="s-fees"><div class="block-head"><div><h2 id="s-fees">4. Fee summary schedule</h2><p class="caption" id="fee-rate-note">Fee rates are fixed for the life of the product.</p>' +
+    (state.structure === "many" ? '<p class="caption">Figures are your share of a ' + m.n + '-policy cell. The Guardrisk minimum is charged per cell, then split.</p>' : '') +
+    '</div></div>' +
+    '<h3>Once-off costs (year 1 only)</h3>' +
+    '<p class="caption">Percentages are of the year-1 gross premium of ' + esc(R(g)) + '.</p>' +
+    sheet("Once-off costs in year 1", headers, onceRows, false) +
+    callout("info", "Client capital into the cell: " + R(f.capZ) + ".", "Returned at exit, not a cost. It is the cash you place in the cell, and it is left out of the cost totals.") +
+    '<h3 class="subhead">Ongoing costs (every year)</h3>' +
+    sheet("Ongoing costs, year 1 and the 10-year total", headers, ongoingRows, false) +
+    '<p class="closing" id="fee-pct-note">' + esc(ongoingNote(f)) + '</p>' +
+    '<p class="closing">The IBNR line is the claims reserve held in the cell and released into later bonuses. It is not a fee, and it is left out of the totals.</p>' +
+    '<h3 class="subhead">Cost by year</h3>' +
+    sheet("Cost by year in rand", ["Year", "Fronting", "FFG fee", "Guardrisk", "Mauritius tax", "Running costs", "Ongoing", "Once-off", "Total"], perRows, "compact") +
+    '<p class="closing">' + esc(foot) + '</p></section>';
+}
+
+function modelWith(m, over) {
+  return runModel({
+    n: m.n,
+    P: m.P,
+    esc: m.esc,
+    cap: m.st.capitalPct,
+    fx0: m.fx0,
+    dep: over.dep !== undefined ? over.dep : m.dep,
+    lr: over.lr !== undefined ? over.lr : m.lr,
+    inv: over.inv !== undefined ? over.inv : m.inv,
+    s: state.structure
+  });
+}
+
+function markLabel(label, hi, exact, base) {
+  var tags = [];
+  if (base) tags.push("base");
+  if (hi) tags.push(exact ? "yours" : "closest");
+  return tags.length ? label + " (" + tags.join(", ") + ")" : label;
+}
+
+function exitCells(label, rows, hi) {
+  var y10 = rows[9];
+  var net = y10.total - y10.cumOutlay;
+  return {
+    hi: hi,
+    cells: [
+      cell(label),
+      cell(R(rows[2].ncbZ), rows[2].ncbZ > 0),
+      cell(R(rows[5].ncbZ), rows[5].ncbZ > 0),
+      cell(R(rows[8].ncbZ), rows[8].ncbZ > 0),
+      cell(R(y10.cumNcbZ), y10.cumNcbZ > 0),
+      cell(R(y10.cashZ)),
+      cell(R(y10.total)),
+      cell(R(y10.cumOutlay)),
+      cell(R(net), net > 0)
+    ]
+  };
+}
+
+function fxExitSteps() {
+  var byValue = {};
+  var i;
+  for (i = 0; i < FX_PRESETS.length; i++) byValue[FX_PRESETS[i].value] = FX_PRESETS[i];
+  return ["strong", "flat", "base", "weak"].map(function (key) {
+    var p = byValue[key];
+    return { dep: num(p.dep, 0), label: p.label };
+  });
+}
+
+var EXIT_HEADERS = ["Assumption", "Year 3 bonus", "Year 6 bonus", "Year 9 bonus", "Bonuses, 10 years", "Cell value, year 10", "Total value built", "Cumulative cost", "Net value"];
+
+function claimsTable(m) {
+  var steps = [0, 10, 20, 30, 40, 50];
+  var nearest = nearestValue(m.claimsPct, steps);
+  var rows = steps.map(function (step) {
+    var hi = step === nearest;
+    var label = markLabel(step + "%", hi, Math.abs(m.claimsPct - step) < 1e-9, false);
+    return exitCells(label, modelWith(m, { lr: step / 100 }), hi);
+  });
+  return sheet("No-claim bonus and exit value at different claims ratios", EXIT_HEADERS, rows, "compact");
+}
+
+function fxTable(m) {
+  var steps = fxExitSteps();
+  var nearest = nearestValue(m.depPct, steps.map(function (s) { return s.dep; }));
+  var rows = steps.map(function (step) {
+    var hi = step.dep === nearest;
+    var label = markLabel(step.label, hi, Math.abs(m.depPct - step.dep) < 1e-9, false);
+    return exitCells(label, modelWith(m, { dep: step.dep / 100 }), hi);
+  });
+  return sheet("No-claim bonus and exit value at different rand paths", EXIT_HEADERS, rows, "compact");
+}
+
+function invTable(m) {
+  var steps = [0, 2, 4, 6, 8];
+  var nearest = nearestValue(m.invPct, steps);
+  var rows = steps.map(function (step) {
+    var hi = step === nearest;
+    var label = markLabel(step + "%", hi, Math.abs(m.invPct - step) < 1e-9, step === 4);
+    return exitCells(label, modelWith(m, { inv: step / 100 }), hi);
+  });
+  return sheet("No-claim bonus and exit value at different investment returns", EXIT_HEADERS, rows, "compact");
+}
+
+function clientRisks(m) {
+  var rise = m.escPct < 0
+    ? "The plan assumes premiums change by " + pct(m.escPct / 100) + " a year. Lower or skipped premiums build less value."
+    : "The plan assumes premiums rise " + pct(m.escPct / 100) + " a year. Lower or skipped premiums build less value.";
+  var items = [
+    ["Exchange rate", "The cell is held in US dollars, so if the rand strengthens, the rand value of the bonuses and the exit value goes down."],
+    ["Investment return", "Returns depend on where the cell's cash is invested and are not guaranteed."],
+    ["Claims experience", "Actual claims reduce the bonuses roughly rand for rand."],
+    ["Large or late claims", "A single large claim, or claims reported after the 7% reserve has been set, can absorb a whole bonus cycle."],
+    ["Premium escalation", rise],
+    ["Guardrisk minimum fee", "At smaller premiums the " + U(GR_MIN) + "-a-year minimum is a larger share of the premium."],
+    ["Shared-cell participation", "Applies to the one-to-many cell. Each policy is ring-fenced, and the risk of under-subscription is mitigated because a shared cell only goes live once all 10 slots are filled, so shared costs are always split ten ways."],
+    ["Lock-in and timing of exit", "There is a minimum 3-year commitment. Leaving between bonus cycles gives up the surplus that has built up but not yet been paid out."],
+    ["Tax deduction capacity", "The premium reduces tax only to the extent the company has taxable income in that year."],
+    ["Getting value out", "Bonuses are paid in US dollars to the GBC owned by your offshore trust. This risk is mitigated because the funds flow into a trust of which you are the ultimate beneficial owner (UBO), so the value stays under your control offshore."],
+    ["Counterparty and regulatory change", "The structure relies on Guardrisk, the fronting insurer, and the South African and Mauritian regulators. Changes in their rules or standing could affect it."]
+  ];
+  var list = '<ul class="risk-points">' + items.map(function (it, i) {
+    return '<li><p class="risk-name"><span class="risk-n">' + (i + 1) + '.</span> ' + esc(it[0]) + '</p><p>' + esc(it[1]) + '</p></li>';
+  }).join("") + '</ul>';
+  return '<div class="risk-panel"><h3 id="s-client-risks">Client risks and key assumptions</h3>' +
+    callout("good", "The product itself is low risk.", "It has been structured and signed off jointly by FFG and CFO Centre under their joint venture, and runs through Guardrisk, an established cell captive provider. The points below are the assumptions and outcomes that can move your results, so you can plan with confidence. The fee structure is fixed for the life of the product, so fees do not change over the term.") +
+    list + '</div>';
+}
+
+function exitSection(m) {
+  return '<section class="block" id="exit-value" aria-labelledby="s-exit"><div class="block-head"><div><h2 id="s-exit">5. Exit value: what could change it</h2><p class="caption">The cell is held in US dollars, so a stronger rand lowers the rand value at exit. Returns depend on where the cell\'s cash is invested. Claims reduce the bonus roughly rand for rand. None of these figures are guaranteed. Your capital and the claims reserve stay in the cell. Net value is the total value built minus the cumulative after-tax cost. In each table, only that one assumption changes, and the highlighted row is your current input or the nearest step shown.</p></div></div>' +
+    '<h3>Claims ratio</h3>' + claimsTable(m) +
+    '<h3 class="subhead">Exchange rate</h3>' + fxTable(m) +
+    '<h3 class="subhead">Investment return</h3>' + invTable(m) +
+    clientRisks(m) + '</section>';
+}
+
 function view(m) {
   var shareNote = state.structure === "many" ? " Your share of a " + m.n + "-policy cell (1/" + m.n + ")." : "";
   var fxOptions = FX_PRESETS.map(function (p) {
@@ -369,7 +698,7 @@ function view(m) {
   var assumptions = '<section class="block" aria-labelledby="s-prem"><div class="block-head"><div><h2 id="s-prem">3. Premium and assumptions</h2></div></div><div class="cols-3">' +
     '<div class="stack"><h3>Premium</h3>' +
     field("premium", "Annual premium you are willing to absorb (R, reinsured into the cell)", state.premiumS) +
-    (state.structure === "many" ? '<label class="field"><span>Policies in the shared cell (including yours)</span><select id="policies">' + pol + '</select></label>' : '') +
+    (state.structure === "many" ? '<label class="field"><span>Policies in the shared cell (including yours)</span><select id="policies">' + pol + '</select></label><p class="result" id="policies-note">The shared cell goes live only once all 10 slots are filled.</p>' : '') +
     field("esc", "Premium increase per year (%)", state.escS) +
     '<p class="result">You pay ' + esc(R(m.y1.gross)) + ' in year 1 including the ' + esc(pct(FRONTING)) + ' fronting fee.</p></div>' +
     '<div class="stack"><h3>Exchange rate</h3>' +
@@ -407,7 +736,7 @@ function view(m) {
   var taxBody = taxRows.map(function (row) {
     return '<tr><td scope="row">' + esc(row[0]) + '</td><td class="num">' + esc(row[1]) + '</td><td class="num' + (row[3] ? " pos" : "") + '">' + esc(row[2]) + '</td></tr>';
   }).join("");
-  var tax = '<section class="block" aria-labelledby="s-tax"><div class="block-head"><div><h2 id="s-tax">4. Tax impact: year ending 28 February 2027</h2><p class="caption">South African company in a tax-paying position, corporate tax 27%, premium deductible.</p></div></div><div class="cols-2"><div class="stack"><h3>Your figures</h3>' +
+  var tax = '<section class="block" aria-labelledby="s-tax"><div class="block-head"><div><h2 id="s-tax">6. Tax impact: year ending 28 February 2027</h2><p class="caption">South African company in a tax-paying position, corporate tax 27%, premium deductible.</p></div></div><div class="cols-2"><div class="stack"><h3>Your figures</h3>' +
     field("taxable", "Taxable income before the premium (R)", state.taxableS) +
     '<label class="field"><span>Months of premium falling in the year to 28 Feb 2027</span><select id="months">' + monthOpts + '</select></label>' +
     '<p class="result">Premium deducted: ' + esc(R(m.deduction)) + ' (' + esc(String(m.months)) + ' of 12 months of the ' + esc(R(m.y1.gross)) + ' year-1 premium, including fronting).</p></div>' +
@@ -452,7 +781,7 @@ function view(m) {
     ]
   });
 
-  var plan = '<section class="block" aria-labelledby="s-plan"><div class="block-head"><div><h2 id="s-plan">5. Your 10-year plan</h2><p class="caption">Policy years from inception. Rand values at each year\'s exchange rate.' + esc(shareNote) + '</p></div></div>' +
+  var plan = '<section class="block" aria-labelledby="s-plan"><div class="block-head"><div><h2 id="s-plan">7. Your 10-year plan</h2><p class="caption">Policy years from inception. Rand values at each year\'s exchange rate.' + esc(shareNote) + '</p></div></div>' +
     '<div class="cols-2"><div><h3>Value built vs your after-tax cost (R millions)</h3>' + lineChart(m) + '</div><div><h3>No-claim bonus payouts (R millions)</h3>' + colChart(m) + '</div></div>' +
     '<div class="segment" role="radiogroup" aria-label="Currency view">' +
     '<label><input type="radio" name="plan-view" id="view-zar" value="zar"' + (state.view === "zar" ? " checked" : "") + '><span>Your position (R)</span></label>' +
@@ -462,7 +791,7 @@ function view(m) {
       : sheet("Cell account in US dollars", ["Year", "Premium reinsured", "FFG fee", "Guardrisk", "Claims", "IBNR reserve", "Underwriting profit", "Investment income", "Mauritius tax", "Profit after tax", "No-claim bonus", "Cell cash at year end"], usd, true)) +
     '<p class="closing">Cell value is cash held in the cell at year end: your capital (' + esc(U(m.capitalUsd)) + '), the IBNR claims reserve and profits not yet paid out. Every third year the surplus above capital and reserve is paid to your GBC as a no-claim bonus. Trust and GBC running costs are paid outside the cell.</p></section>';
 
-  return metrics + structure + risks + assumptions + tax + plan;
+  return metrics + structure + risks + assumptions + feeSection(m) + exitSection(m) + tax + plan;
 }
 
 function syncLead(m) {
@@ -703,15 +1032,17 @@ function wireLead() {
 }
 
 var calcRoot = document.getElementById("calculator");
-calcRoot.addEventListener("input", onCalc);
-calcRoot.addEventListener("change", onCalc);
-calcRoot.addEventListener("click", onClick);
-var resizeTimer;
-window.addEventListener("resize", function () {
-  var w = document.getElementById("calculator").clientWidth;
-  if (w === lastWidth) return;
-  clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(render, 120);
-});
-render();
-wireLead();
+if (calcRoot) {
+  calcRoot.addEventListener("input", onCalc);
+  calcRoot.addEventListener("change", onCalc);
+  calcRoot.addEventListener("click", onClick);
+  var resizeTimer;
+  window.addEventListener("resize", function () {
+    var w = document.getElementById("calculator").clientWidth;
+    if (w === lastWidth) return;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(render, 120);
+  });
+  render();
+  wireLead();
+}
